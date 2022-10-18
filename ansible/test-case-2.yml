@@ -6,7 +6,7 @@
   gather_facts: False
   hosts: R3
   vars_files:
-    - ../vars/test-case-2.yml
+    - ./vars/test-case-2.yml
   
   tasks:
     - name: "Set static route"

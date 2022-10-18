@@ -1,0 +1,14 @@
+---
+- name: "Gather all IOS facts"
+  hosts: routers
+  gather_facts: False
+
+  tasks:
+    - name: "Gather all IOS facts"
+      cisco.ios.ios_facts:
+        gather_subset: all
+      register: ios_facts
+    
+    - ansible.builtin.debug:
+        var: ios_facts
+  
