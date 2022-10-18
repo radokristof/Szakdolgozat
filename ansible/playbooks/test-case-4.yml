@@ -1,8 +1,8 @@
 ---
-- name: "Setup initial network"
+- name: "PRE-TASK -- Setup initial network"
   ansible.builtin.import_playbook: initial-network.yml
 
-- name: "Set incorrect netmask on R2"
+- name: "TEST-CASE #4 -- Set incorrect netmask on R2"
   gather_facts: False
   hosts: R2
   vars_files:

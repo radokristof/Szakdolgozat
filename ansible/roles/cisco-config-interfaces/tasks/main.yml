@@ -1,0 +1,8 @@
+---
+  - name: "Toggle interface"
+    cisco.ios.ios_interfaces:
+      config:
+        - name: "{{ item.name }}"
+          description: "{{ item.description }}"
+          enabled: true
+    loop: "{{ interfaces }}"

@@ -1,8 +1,8 @@
 ---
-- name: "Setup initial network"
+- name: "PRE-TASK -- Setup initial network"
   ansible.builtin.import_playbook: initial-network.yml
 
-- name: "Turn off an interface in the route"
+- name: "TEST-CASE #3 -- Turn off an interface in the route"
   gather_facts: False
   hosts: R1
   vars_files:
@@ -13,4 +13,4 @@
       ansible.builtin.include_role:
         name: cisco-config-interfaces
       vars:
-        
+        interfaces: "{{ R1.interfaces }}"

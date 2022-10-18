@@ -1,8 +1,8 @@
 ---
-- name: "Setup initial network"
+- name: "PRE-TASK -- Setup initial network"
   ansible.builtin.import_playbook: initial-network.yml
 
-- name: "Set incorrect next-hop parameter in R3 router"
+- name: "TEST-CASE #2 -- Set incorrect next-hop parameter in R3 router"
   gather_facts: False
   hosts: R3
   vars_files:

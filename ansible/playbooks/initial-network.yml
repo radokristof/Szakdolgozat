@@ -1,5 +1,5 @@
 ---
-- name: "Initial (correct) router configuration"
+- name: "Initial router configuration"
   hosts: routers
   gather_facts: False
   vars_files:

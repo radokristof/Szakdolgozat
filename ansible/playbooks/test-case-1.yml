@@ -1,8 +1,8 @@
 ---
-- name: "Setup initial network"
+- name: "PRE-TASK -- Setup initial network"
   ansible.builtin.import_playbook: initial-network.yml
 
-- name: "Remove a route from the path between PC1 and PC2"
+- name: "TEST-CASE #1 -- Remove a route from the path between PC1 and PC2"
   gather_facts: False
   hosts: R2
   vars_files:
