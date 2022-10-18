@@ -1,0 +1,7 @@
+---
+R2:
+  routes:
+    - dest_address: 10.0.2.0/28
+      next_hop: 192.168.16.2
+    - dest_address: 10.0.1.0/28
+      next_hop: 192.168.14.1

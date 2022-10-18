@@ -1,0 +1,12 @@
+---
+  - name: "Set static routes"
+    cisco.ios.ios_static_routes:
+      config:
+        - address_families:
+          - afi: ipv4
+            routes:
+            - dest: "{{ item.dest_address }}"
+              next_hops:
+                - forward_router_address: "{{ item.next_hop }}"
+      state: "{{ item.state | default(lookup('ansible.builtin.vars', 'state')) }}"
+    loop: "{{ routes }}"

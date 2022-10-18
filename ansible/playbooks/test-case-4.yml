@@ -1,0 +1,17 @@
+---
+- name: "Setup initial network"
+  ansible.builtin.import_playbook: initial-network.yml
+
+- name: "Set incorrect netmask on R2"
+  gather_facts: False
+  hosts: R2
+  vars_files:
+    - ../vars/test-case-4.yml
+  
+  tasks:
+    - name: "Change IP interface status on R2"
+      ansible.builtin.include_role:
+         name: cisco-config-static_routes
+      vars:
+        routes: "{{ R2.routes }}"
+        state: replaced

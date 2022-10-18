@@ -1,0 +1,142 @@
+---
+R1:
+  interfaces:
+    - name: GigabitEthernet0/0
+      ip_address: 192.168.10.1/30
+      description: "Route to R4"
+    - name: GigabitEthernet0/1
+      ip_address: 192.168.11.1/30
+      description: "Route to R5"
+    - name: GigabitEthernet0/2
+      ip_address: 192.168.13.1/30
+      description: "Route to R2"
+    - name: GigabitEthernet0/3
+      ip_address: 192.168.12.1/30
+      description: "Route to R3"
+    - name: GigabitEthernet0/15
+      description: "Management VPN access"
+      ip_address: 10.10.20.101/24
+  routes:
+    - dest_address: 10.0.1.0/24
+      next_hop: 192.168.13.2
+  mgmt_routes:
+    - vrf: mgmt-intf
+      dest_address: 0.0.0.0/0
+      next_hop: 10.10.20.254
+      interfaces:
+        - "GigabitEthernet0/15"
+
+R2:
+  interfaces:
+    - name: GigabitEthernet0/0
+      ip_address: 192.168.13.2/30
+      description: "Route to R1"
+    - name: GigabitEthernet0/1
+      ip_address: 192.168.14.2/30
+      description: "Route to R4"
+    - name: GigabitEthernet0/2
+      ip_address: 192.168.16.1/30
+      description: "Route to R3"
+    - name: GigabitEthernet0/3
+      ip_address: 192.168.17.1/30
+      description: "Route to R5"
+    - name: GigabitEthernet0/15
+      description: "Management VPN access"
+      ip_address: 10.10.20.102/24
+  routes:
+    - dest_address: 10.0.2.0/24
+      next_hop: 192.168.16.2
+    - dest_address: 10.0.1.0/24
+      next_hop: 192.168.14.1
+  mgmt_routes:
+    - vrf: mgmt-intf
+      dest_address: 0.0.0.0/0
+      next_hop: 10.10.20.254
+      interfaces:
+        - "GigabitEthernet0/15"
+
+R3:
+  interfaces:
+    - name: GigabitEthernet0/0
+      ip_address: 192.168.12.2/30
+      description: "Route to R1"
+    - name: GigabitEthernet0/1
+      ip_address: 192.168.18.1/30
+      description: "Route to R5"
+    - name: GigabitEthernet0/2
+      ip_address: 192.168.16.2/30
+      description: "Route to R2"
+    - name: GigabitEthernet0/3
+      ip_address: 192.168.15.2/30
+      description: "Route to R4"
+    - name: GigabitEthernet0/15
+      description: "Management VPN access"
+      ip_address: 10.10.20.103/24
+  routes:
+    - dest_address: 10.0.2.0/24
+      next_hop: 192.168.18.2
+  mgmt_routes:
+    - vrf: mgmt-intf
+      dest_address: 0.0.0.0/0
+      next_hop: 10.10.20.254
+      interfaces:
+        - "GigabitEthernet0/15"
+R4:
+  interfaces:
+    - name: GigabitEthernet0/0
+      ip_address: 192.168.10.2/30
+      description: "Route to R1"
+    - name: GigabitEthernet0/1
+      ip_address: 192.168.14.1/30
+      description: "Route to R2"
+    - name: GigabitEthernet0/2
+      ip_address: 10.0.1.1/24
+      description: "Route to PC1"
+    - name: GigabitEthernet0/3
+      ip_address: 192.168.15.1/30
+      description: "Route to R3"
+    - name: GigabitEthernet0/15
+      description: "Management VPN access"
+      ip_address: 10.10.20.104/24
+  routes:
+    - dest_address: 10.0.2.0/24
+      next_hop: 192.168.14.2
+  mgmt_routes:
+    - vrf: mgmt-intf
+      dest_address: 0.0.0.0/0
+      next_hop: 10.10.20.254
+      interfaces:
+        - "GigabitEthernet0/15"
+  ping:
+    source: 10.0.1.1
+    dest: 10.0.2.1
+
+R5:
+  interfaces:
+    - name: GigabitEthernet0/0
+      ip_address: 192.168.11.2/30
+      description: "Route to R1"
+    - name: GigabitEthernet0/1
+      ip_address: 192.168.18.2/30
+      description: "Route to R3"
+    - name: GigabitEthernet0/2
+      ip_address: 10.0.2.1/24
+      description: "Route to PC2"
+    - name: GigabitEthernet0/3
+      ip_address: 192.168.17.2/30
+      description: "Route to R2"
+    - name: GigabitEthernet0/15
+      description: "Management VPN access"
+      ip_address: 10.10.20.105/24
+  routes:
+    - dest_address: 10.0.1.0/24
+      next_hop: 192.168.11.1
+  mgmt_routes:
+    - vrf: mgmt-intf
+      dest_address: 0.0.0.0/0
+      next_hop: 10.10.20.254
+      interfaces:
+        - "GigabitEthernet0/15"
+  ping:
+    source: 10.0.2.1
+    dest: 10.0.1.1

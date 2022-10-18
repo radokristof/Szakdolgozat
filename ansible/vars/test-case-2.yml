@@ -1,0 +1,6 @@
+---
+R3:
+  routes:
+    - dest_address: 10.0.2.0/24
+      next_hop: 192.168.15.1
+      state: replaced

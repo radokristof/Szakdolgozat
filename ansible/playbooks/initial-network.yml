@@ -1,0 +1,47 @@
+---
+- name: "Initial (correct) router configuration"
+  hosts: routers
+  gather_facts: False
+  vars_files:
+    - ../vars/initial-network.yml
+
+  pre_tasks:
+    - name: "Gather minimal IOS facts"
+      cisco.ios.ios_facts:
+        gather_subset: min
+      register: ios_facts
+  
+  tasks:
+    # Interfész(ek) IP címeinek beállítása
+    # A megadott fájl alapján való interfész IP címek beállítása, routerenként, hostname alapján.
+    - name: "Set initial interface IP"
+      ansible.builtin.include_role:
+        name: cisco-config-l3_interface
+      vars:
+        interfaces: "{{ lookup('ansible.builtin.vars', ios_facts.ansible_facts.ansible_net_hostname).interfaces }}"
+      when: ios_facts.ansible_facts.ansible_net_hostname is defined
+    
+    # Statikus route-ok beállítása
+    # Szintén a fájlból kiolvasott route-ok kerülnek beállításra, routerenként, hostname alapján.
+    - name: "Set VRF mgmt route"
+      ansible.builtin.include_role:
+        name: cisco-config-static_routes_vrf
+      vars:
+        mgmt_routes: "{{ lookup('ansible.builtin.vars', ios_facts.ansible_facts.ansible_net_hostname).mgmt_routes }}"
+        state: overridden
+      when: ios_facts.ansible_facts.ansible_net_hostname is defined
+    
+    - name: "Set static routes"
+      ansible.builtin.include_role:
+        name: cisco-config-static_routes
+      vars:
+        routes: "{{ lookup('ansible.builtin.vars', ios_facts.ansible_facts.ansible_net_hostname).routes }}"
+        state: merged
+      when: ios_facts.ansible_facts.ansible_net_hostname is defined
+    
+    # Az előbb beállított route-ok alapszintű tesztelése. Csak a két végpont közti router ellenőrzése ping-el.
+    - name: "Test reachability between R4 and R5"
+      cisco.ios.ios_ping:
+        source: "{{ lookup('ansible.builtin.vars', ios_facts.ansible_facts.ansible_net_hostname).ping.source }}"
+        dest: "{{ lookup('ansible.builtin.vars', ios_facts.ansible_facts.ansible_net_hostname).ping.dest }}"
+      when: ios_facts.ansible_facts.ansible_net_hostname == "R4" or ios_facts.ansible_facts.ansible_net_hostname == "R5"

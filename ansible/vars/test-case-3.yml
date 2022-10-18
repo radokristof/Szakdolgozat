@@ -1,0 +1,6 @@
+---
+R1:
+  interfaces:
+    - name: GigabitEthernet0/2
+      ip_address: 192.168.13.1/30
+      description: "Route to R2"

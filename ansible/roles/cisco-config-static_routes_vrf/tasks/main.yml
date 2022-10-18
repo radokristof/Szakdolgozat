@@ -1,0 +1,21 @@
+---
+  - name: "Set VRF static routes"
+    cisco.ios.ios_static_routes:
+      config:
+        - vrf: "{{ item.vrf }}"
+          address_families:
+          - afi: ipv4
+            routes:
+            - dest: "{{ item.dest_address }}"
+              next_hops:
+                - forward_router_address: "{{ item.next_hop }}"
+      state: "{{ item.state | default(lookup('ansible.builtin.vars', 'state')) }}"
+    loop: "{{ mgmt_routes }}"
+
+  - name: "Add VRF interfaces"
+    cisco.ios.ios_vrf:
+      name: "{{ item.vrf }}"
+      description: "Management VRF"
+      interfaces: "{{ item.interfaces }}"
+      state: present
+    loop: "{{ mgmt_routes }}"
