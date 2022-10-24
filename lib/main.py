@@ -2,19 +2,25 @@ import os
 import sys
 import logging
 import argparse
-from ansible_api.playbook import run_playbook
+from colorama import Fore, Style, init
 
-logger = logging.getLogger(__name__)
+from ansible_api.playbook import run_playbook
+from ansible_api.task import run_task
+from network_analyzer.NetworkAnalyzer import NetworkAnalyzer
+
+logger = logging.getLogger()
+LOGGER_LEVEL = logging.DEBUG
 
 def setup_logging():
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(LOGGER_LEVEL)
     handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(LOGGER_LEVEL)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
 def main():
+    init(autoreset=True)
     setup_logging()
     
     # Ansible cfg env beállítása
@@ -28,17 +34,34 @@ def main():
     parser.add_argument('--no-auto-fix', dest="autofix", action="store_false", help="Just report detected errors")
     parser.set_defaults(autofix=True)
     args = parser.parse_args()
-    
+
     logger.debug("Program initalization complete")
+    print(Fore.CYAN + "Starting Network Analyzer Tool")
+    
     logger.info("Running supplied playbook")
+    
+    # A megadott teszteset playbook lefuttatása
     run_playbook(inventory_file=os.path.abspath(args.inventory), playbook_file=os.path.abspath(args.playbook))
     logger.debug("Supplied playbook finished")
 
     logger.debug("Running gather_facts playbook")
+    # Összes elérhető infó kinyerés a routerek-ből, annak érdekében, hogy a hiba elemzése minél könnyebb legyen
     results = run_playbook(inventory_file=os.path.abspath(args.inventory), playbook_file=os.path.abspath('../ansible/gather-ios-facts.yml'))
     logger.debug("Facts gathered")
 
-    print(results)
-
+    # Algoritmus futtatása, hiba keresése
+    analyzer = NetworkAnalyzer(results)
+    analyzer.plot_graph()
+    
+    # Javítás elküldése (ha lehetséges és kérte a felhasználó)
+    if args.autofix:
+        run_task()
+    else:
+        print("Print status")
+    
+    print(Fore.CYAN + "Program finished, exiting!")
+    print(Fore.YELLOW + Style.DIM + "Bye!")
+    
 if __name__ == "__main__":
-    main()
+    # main()
+    run_task('cisco-config-interfaces', '../ansible/hosts.yml')

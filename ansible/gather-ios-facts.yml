@@ -6,9 +6,11 @@
   tasks:
     - name: "Gather all IOS facts"
       cisco.ios.ios_facts:
-        gather_subset: all
+        gather_subset: min
+        gather_network_resources:
+          - l3_interfaces
+          - hostname
+          - interfaces
+          - static_routes
+          - l2_interfaces
       register: ios_facts
-    
-    - ansible.builtin.debug:
-        var: ios_facts
-  
