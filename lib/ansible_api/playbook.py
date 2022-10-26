@@ -2,12 +2,16 @@ import logging
 from pathlib import Path
 import ansible_runner
 
+from network_analyzer.exception.exception import PlaybookRunException
+
 logger = logging.getLogger(__name__)
 
-def run_playbook(inventory_file, playbook_file):
-    logger.debug("Running playbook {} with inventory {}".format(Path(playbook_file).name, Path(inventory_file).name))
-    r = ansible_runner.run(playbook=playbook_file, inventory=inventory_file)
+def run_playbook(playbook_file, data_dir):
+    logger.info("Running playbook '{}' in data_dir '{}'".format(Path(playbook_file).name, Path(data_dir).name))
+    r = ansible_runner.run(private_data_dir=data_dir, playbook=playbook_file)
     logger.info("{}: {}".format(r.status, r.rc))
+    if r.status != "successful":
+        raise PlaybookRunException(f"Playbook run failed {r.status}")
     logger.debug(r.stats)
     host_facts = {}
     for ok_host in r.stats['ok']:

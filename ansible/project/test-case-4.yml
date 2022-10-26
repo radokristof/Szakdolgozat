@@ -6,7 +6,7 @@
   gather_facts: False
   hosts: R2
   vars_files:
-    - ./vars/test-case-4.yml
+    - ../vars/test-case-4.yml
   
   tasks:
     - name: "Change IP interface status on R2"

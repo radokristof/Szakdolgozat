@@ -139,3 +139,16 @@ A konfigurálása a netplan yaml alapú leírással történik.
 Viszont a host-on megtalálható interfészek nevei nem egyeznek a CML-ben láthatókkal!
 
 **Például a CML-ben látható ```ens3``` interfész az Ubuntu-ban ```ens2```-ként látszik!**
+
+## Network Analyzer
+### Telepítés
+A programnak szüksége van bizonyos modulokra a helyes működéshez. Ez telepíthető egyszerűen az alábbi parancssal:
+```
+pip install -r requirements.txt
+```
+
+### Használat
+A program indítása:
+```
+python3 ../ansible/project/initial-network.yml -s 10.0.2.2/24 -d 10.0.1.2/24
+```
