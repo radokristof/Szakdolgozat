@@ -4,5 +4,5 @@
       config:
         - name: "{{ item.name }}"
           description: "{{ item.description }}"
-          enabled: true
+          enabled: "{{ item.enabled | default(lookup('ansible.builtin.vars', 'enabled')) }}"
     loop: "{{ interfaces }}"

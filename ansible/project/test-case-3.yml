@@ -3,6 +3,8 @@
   ansible.builtin.import_playbook: initial-network.yml
 
 - name: "TEST-CASE #3 -- Turn off an interface in the route"
+  # Source: 10.0.2.2/24
+  # Destination: 10.0.1.2/24
   gather_facts: False
   hosts: R1
   vars_files:
@@ -14,3 +16,7 @@
         name: cisco-config-interfaces
       vars:
         interfaces: "{{ R1.interfaces }}"
+
+# Steps to eliminate this error:
+# 1. Get current config - check if routes exists considering if their interfaces are enabled or not!
+# 2. Go through interfaces - enable all of them which has an IP address and not enabled

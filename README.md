@@ -118,9 +118,9 @@ A `playbook`-ok között megtalálható egy speciális `initial-network.yml` nev
 Mac-en az alábbi paramétereket kell beírni az SSH működéséhez:
 /etc/ssh/ssh_config
 ```
-HostkeyAlgorithms ssh-dss,ssh-rsa
-
-KexAlgorithms +diffie-hellman-group1-sha1,diffie-hellman-group14-sha1
+Host 10.10.20.*
+    HostkeyAlgorithms ssh-dss,ssh-rsa
+    KexAlgorithms +diffie-hellman-group1-sha1,diffie-hellman-group14-sha1
 ```
 
 Az SSH kulcsok minden deploy esetén újra lesznek generálva. Erre sajnos nem találtam jó metódust, hogy el lehessen menteni az SSH kulcsokat.

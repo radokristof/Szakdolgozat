@@ -3,3 +3,5 @@
 __pycache__/
 ansible/artifacts/
 ansible/project/main.json
+lib/.mypy_cache/
+test.py

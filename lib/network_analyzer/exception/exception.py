@@ -13,3 +13,7 @@ class NetworkMultipleDefinitionException(Exception):
 class PlaybookRunException(Exception):
     def __init__(self, message):
         super().__init__(message)
+
+class InterfaceNotFound(Exception):
+    def __init__(self, message):
+        super().__init__(message)
