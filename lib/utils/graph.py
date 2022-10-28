@@ -1,5 +1,5 @@
 import logging
-from typing import Union
+from typing import Union, List, Tuple
 import networkx as nx
 import netaddr
 
@@ -73,3 +73,22 @@ def check_source_destination(interface: dict, source: netaddr.IPNetwork, destina
         elif ip_addr == destination:
             return "destination"
     return None
+
+
+def get_new_edges(initial_graph, current_graph) -> List[Tuple[str, str]]:
+    # Get which edges were added to the current graph, compared to the initial state.
+    return get_graph_difference(current_graph, initial_graph).edges
+
+
+def get_removed_edges(initial_graph, current_graph):
+    # Get which edges were removed from the current graph, compared to the initial state.
+    return get_graph_difference(initial_graph, current_graph).edges
+
+
+def add_new_and_removed_edges(new_edges, removed_edges, tmp_graph):
+    for source, destination in new_edges:
+        tmp_graph.add_edge(source, destination, color='green', weight=2, style='--')
+        logger.debug(f"Adding new edge ({source}, {destination}) to graph")
+    for source, destination in removed_edges:
+        tmp_graph.set_edge_attributes(tmp_graph, {(source, destination): {"color": 'red'}})
+        logger.debug(f"Updating removed edge attribute ({source}, {destination}) from graph")

@@ -12,8 +12,8 @@ from ansible_api.task import run_task
 from network_analyzer.Host import Host, SourceHost, DestinationHost
 from network_analyzer.exception.exception import NodeNotFoundException, NetworkSourceDestinationException, \
     NetworkMultipleDefinitionException
-from utils.graph import get_interface_status_from_route, check_interface_status, get_graph_difference, \
-    check_source_destination
+from utils.graph import get_interface_status_from_route, check_interface_status, check_source_destination, \
+    get_new_edges, get_removed_edges, add_new_and_removed_edges
 from utils.ip import compare_cidr_and_ip_address
 
 logger = logging.getLogger(__name__)
@@ -32,10 +32,10 @@ class NetworkAnalyzer:
         """
         Create a new host for every fact element
         Add the hosts to the hosts directive
-        :param facts:
-        :param source:
-        :param destination:
-        :param test_case_name:
+        :param facts: The gathered facts from Ansible
+        :param source: The source network
+        :param destination: The destination network
+        :param test_case_name: Name of the test case (usually filename)
         """
         self.test_case = test_case_name
         for hostname, host_facts in facts.items():
@@ -62,6 +62,7 @@ class NetworkAnalyzer:
         Refresh the current instance.
         Instead of calling __init__ directly (which is a bad practice), 
         use this method to re-initialize the instance.
+        :param: facts: The fresh gathered facts from Ansible
         """
         self.hosts = []
         self.graph_from_source = nx.DiGraph()
@@ -167,15 +168,22 @@ class NetworkAnalyzer:
                         edges_from_source.append(self.create_graph_edge(host, forward_router_address, forward=True))
                         logger.debug(f"Adding forward edge for host {host.hostname}")
                     if dest == self.source.network:
-                        edges_from_destination.append(self.create_graph_edge(host, forward_router_address, forward=True))
+                        edges_from_destination.append(
+                            self.create_graph_edge(host, forward_router_address, forward=True)
+                        )
                         logger.debug(f"Adding reverse edge for host {host.hostname}")
         logger.debug(f"Edges for host {host.hostname}: {edges_from_source}")
         return edges_from_source, edges_from_destination
 
     def create_pc_edge(self, host: Host, interface: dict) -> Union[Tuple[str, str], None]:
-        # Create static PC nodes in the graph. These represent the computers used in network troubleshooting.
-        # PC-S will be the Source PC (this will be placed at the source network)
-        # PC-D will be the Destination PC (this will be placed at the destination network)
+        """
+        Create static PC nodes in the graph. These represent the computers used in network troubleshooting.
+        PC-S will be the Source PC (this will be placed at the source network)
+        PC-D will be the Destination PC (this will be placed at the destination network)
+        :param host:
+        :param interface:
+        :return:
+        """
         if 'ipv4' in interface:
             if netaddr.IPNetwork(interface['ipv4'][0]['address']) == self.source.network:
                 return 'PC-S', host.hostname
@@ -185,16 +193,25 @@ class NetworkAnalyzer:
 
     def detect_loop_in_route(self) -> dict:
         # Check if the current graph contains a loop.
-        current_loop = None
+        loops = {}
+        source_loop = None
+        destination_loop = None
         for loop in nx.simple_cycles(self.graph_from_source):
-            current_loop = loop.copy()
-        # The current_loop var is empty if there are no loops in the network
-        if current_loop:
+            source_loop = loop.copy()
+        for loop in nx.simple_cycles(self.graph_from_destination):
+            destination_loop = loop.copy()
+        # The source_loop or destination_loop var is empty if there are no loops in the network
+        loops['source'] = self.check_loop_type(source_loop)
+        loops['destination'] = self.check_loop_type(destination_loop)
+        return loops
+
+    def check_loop_type(self, loop):
+        if loop:
             if nx.has_path(self.graph_from_source, self.source.hostname, self.destination.hostname):
                 # It has a loop, but the path is clear towards the destination, so the current route is unaffected.
-                return {"loop": True, "affected": False, "members": current_loop}
+                return {"loop": True, "affected": False, "members": loop}
             # It has a loop and the path is not clear towards the destination.
-            return {"loop": True, "affected": True, "members": current_loop}
+            return {"loop": True, "affected": True, "members": loop}
         # Check if there is no loop, the route is still functional
         else:
             # If it has path and there is no loop, the network seems healthy.
@@ -205,9 +222,13 @@ class NetworkAnalyzer:
                 return {"loop": False, "affected": True}
 
     def find_host_with_ip_address(self, ip_address: str) -> Host:
-        # Check if a host has an IP Address
-        # Parameter ip_address is a normal ip address with dot notation. Like: 192.168.10.1
-        # Interface IP address is in CIDR notation. Like: 192.168.10.1/30
+        """
+        Check if a host has an IP Address
+        Parameter ip_address is a normal ip address with dot notation. Like: 192.168.10.1
+        Interface IP address is in CIDR notation. Like: 192.168.10.1/30
+        :param ip_address:
+        :return:
+        """
         for host in self.hosts:
             for interface in host.interfaces:
                 # If an interface does not have an IP address, it will not have an 'ipv4' key
@@ -219,21 +240,33 @@ class NetworkAnalyzer:
         raise NodeNotFoundException(f"Not found {ip_address}")
 
     def plot_graph(self, filename: str):
-        # Plot the graph to a file
-        # Used for debugging and creating visualizations for thesis.
-        # Removed node: should be red
-        # Added node: should be dotted and green
-        # Warning node: should be yellow (edges which might have a problem but does not affect current routing)
+        """
+        Plot the graph to a file
+        Used for debugging and creating visualizations for thesis.
+        Removed node: should be red
+        Added node: should be dotted and green
+        Warning node: should be yellow (edges which might have a problem but does not affect current routing)
+        :param filename:
+        :return:
+        """
         logger.debug("Create plot of graph")
-        tmp_graph = self.graph_from_source
-        new_edges = self.get_new_edges()
-        removed_edges = self.get_removed_edges()
-        for source, destination in new_edges:
-            tmp_graph.add_edge(source, destination, color='green', weight=2, style='--')
-            logger.debug(f"Adding new edge ({source}, {destination}) to graph")
-        for source, destination in removed_edges:
-            tmp_graph.set_edge_attributes(tmp_graph, {(source, destination): {"color": 'red'}})
-            logger.debug(f"Updating removed edge attribute ({source}, {destination})")
+        # Get source graph new and removed edges
+        source_tmp_graph = self.graph_from_source
+        source_new_edges = get_new_edges(self.initial_graph_from_source, self.graph_from_source)
+        source_removed_edges = get_removed_edges(self.initial_graph_from_source, self.graph_from_source)
+
+        # Get destination graph new and removed edges
+        destination_tmp_graph = self.graph_from_destination
+        destination_new_edges = get_new_edges(self.initial_graph_from_destination, self.graph_from_destination)
+        destination_removed_edges = get_removed_edges(self.initial_graph_from_destination, self.graph_from_destination)
+
+        # Set new and removed edges types/colors
+        add_new_and_removed_edges(source_new_edges, source_removed_edges, source_tmp_graph) # noqa
+        add_new_and_removed_edges(destination_new_edges, destination_removed_edges, destination_tmp_graph) # noqa
+
+        # Combine the two graph into a single graph
+        tmp_graph = nx.compose(source_tmp_graph, destination_tmp_graph)
+        # Get the attributes of the nodes
         colors = nx.get_edge_attributes(tmp_graph, 'color').values()
         weights = nx.get_edge_attributes(tmp_graph, 'weight').values()
         styles = nx.get_edge_attributes(tmp_graph, 'style').values()
@@ -260,14 +293,6 @@ class NetworkAnalyzer:
         # Show the graph
         plt.savefig(filename)
         logger.info(f"Plot saved to file {filename}!")
-
-    def get_new_edges(self):
-        # Get which edges were added to the current graph, compared to the initial state.
-        return get_graph_difference(self.graph_from_source, self.initial_graph_from_source).edges
-
-    def get_removed_edges(self):
-        # Get which edges were removed from the current graph, compared to the initial state.
-        return get_graph_difference(self.initial_graph_from_source, self.graph_from_source).edges
 
     def get_shortest_path(self) -> list:
         # Get the shortest path in a graph.
