@@ -13,7 +13,7 @@ from network_analyzer.Host import Host, SourceHost, DestinationHost
 from network_analyzer.exception.exception import NodeNotFoundException, NetworkSourceDestinationException, \
     NetworkMultipleDefinitionException
 from utils.graph import get_interface_status_from_route, check_interface_status, check_source_destination, \
-    get_new_edges, get_removed_edges, add_new_and_removed_edges
+    get_new_edges, get_removed_edges
 from utils.ip import compare_cidr_and_ip_address
 
 logger = logging.getLogger(__name__)
@@ -94,15 +94,17 @@ class NetworkAnalyzer:
                     edges_from_source.append(edge)
                     edges_from_destination.append(tuple(reversed(edge)))
         for source, destination in edges_from_source:
-            self.graph_from_source.add_edge(source, destination, color='black', weight=2, style='-')
+            self.graph_from_source.add_edge(source, destination, color='blue', weight=2, style='-',
+                                            label='Route from source to destination')
         for source, destination in edges_from_destination:
-            self.graph_from_destination.add_edge(source, destination, color='black', weight=2, style='-')
+            self.graph_from_destination.add_edge(source, destination, color='orange', weight=2, style='-',
+                                                 label='Route from destination to source')
         logger.debug("Network initialization complete")
 
     def init_network(self, source: netaddr.IPNetwork, destination: netaddr.IPNetwork):
         """
         Initialize network, find source and destination network provided by the user.
-        If these networks cannot be found in the current hosts, the program will exit.
+        If these networks cannot be found in the current hosts, the program will exit
         :param source: The source network
         :param destination: The destination network
         :return: None
@@ -254,15 +256,18 @@ class NetworkAnalyzer:
         source_tmp_graph = self.graph_from_source
         source_new_edges = get_new_edges(self.initial_graph_from_source, self.graph_from_source)
         source_removed_edges = get_removed_edges(self.initial_graph_from_source, self.graph_from_source)
+        source_tmp_graph.add_edges_from(source_new_edges, color='green', weight=2, style='--', label='Added edge')
+        for source, destination in source_removed_edges:
+            nx.set_edge_attributes(source_tmp_graph, {(source, destination): {"color": 'red', "label": 'Removed edge'}})
 
         # Get destination graph new and removed edges
         destination_tmp_graph = self.graph_from_destination
         destination_new_edges = get_new_edges(self.initial_graph_from_destination, self.graph_from_destination)
         destination_removed_edges = get_removed_edges(self.initial_graph_from_destination, self.graph_from_destination)
-
-        # Set new and removed edges types/colors
-        add_new_and_removed_edges(source_new_edges, source_removed_edges, source_tmp_graph) # noqa
-        add_new_and_removed_edges(destination_new_edges, destination_removed_edges, destination_tmp_graph) # noqa
+        destination_tmp_graph.add_edges_from(destination_new_edges, color='red', weight=2, style='--')
+        for source, destination in destination_removed_edges:
+            nx.set_edge_attributes(destination_tmp_graph, {(source, destination): {"color": 'red',
+                                                                                   "label": 'Removed edge'}})
 
         # Combine the two graph into a single graph
         tmp_graph = nx.compose(source_tmp_graph, destination_tmp_graph)
@@ -271,25 +276,34 @@ class NetworkAnalyzer:
         weights = nx.get_edge_attributes(tmp_graph, 'weight').values()
         styles = nx.get_edge_attributes(tmp_graph, 'style').values()
 
+        node_color = {
+            'PC-S': 'tab:green',
+            'PC-D': 'tab:red',
+        }
+
+        node_colors = [node_color.get(node, 'tab:blue') for node in tmp_graph.nodes()]
+
+        node_size = {
+            'PC-S': 1000,
+            'PC-D': 1000,
+        }
+        node_sizes = [node_size.get(node, 800) for node in tmp_graph.nodes()]
+
         # Add title to plot
+        plt.figure(3, figsize=(6, 6))
         plt.suptitle(f"Summary of {self.test_case}")
         plt.title(f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-        # Create legend for used edge types
-        plt.legend(scatterpoints=1, loc='best')
-
-        # Draw the graph
-        nx.draw_networkx(
-            tmp_graph,
-            pos=nx.planar_layout(tmp_graph),
-            edge_color=colors,
-            node_color='tab:blue', node_size=800,
-            width=list(weights),
-            with_labels=True, style=list(styles),
-            arrowsize=30,
-            font_color="whitesmoke",
-            alpha=1
+        pos = nx.circular_layout(tmp_graph, scale=1)
+        nx.draw_networkx_nodes(
+            tmp_graph, pos=pos, node_color=node_colors, node_size=node_sizes, alpha=1
         )
+        nx.draw_networkx_edges(
+            tmp_graph, pos=pos, edge_color=colors, width=list(weights), style=list(styles),
+            arrowsize=20,  connectionstyle='arc3, rad = 0.1'
+        )
+        nx.draw_networkx_labels(tmp_graph, pos=pos, font_size=10, font_color='whitesmoke')
+
         # Show the graph
         plt.savefig(filename)
         logger.info(f"Plot saved to file {filename}!")
@@ -309,7 +323,7 @@ class NetworkAnalyzer:
         # Collect down interfaces (which has in IP address configured)
         all_down_interfaces = {}
         for host in self.hosts:
-            down_interfaces = check_interface_status(host)
+            down_interfaces = check_interface_status(host, self.source.network, self.destination.network)
             if down_interfaces:
                 all_down_interfaces[host.hostname] = down_interfaces
         # Enable all down interface
@@ -326,7 +340,7 @@ class NetworkAnalyzer:
             # We need to gather ios facts again and recreate the NetworkAnalyzer instance.
             self.refresh_network()
             network_state = self.detect_loop_in_route()
-            if network_state['affected'] is False:
+            if network_state['source']['affected'] is False and network_state['destination']['affected'] is False:
                 logger.info("Interfaces enabled - network fixed")
                 return True
         logger.info("Continuing with fixes - enabling interfaces was not enough")

@@ -2,10 +2,11 @@ import logging
 from typing import Union, List, Tuple
 import networkx as nx
 import netaddr
+from matplotlib.lines import Line2D
 
 from network_analyzer.Host import Host
 from network_analyzer.exception.exception import InterfaceNotFound
-from utils.ip import check_network_contains_ip
+from utils.ip import check_network_contains_ip, check_network_contains_network
 
 logger = logging.getLogger(__name__)
 
@@ -29,16 +30,39 @@ def get_interface_status_from_route(host: Host, ip_address: str) -> bool:
     raise InterfaceNotFound(f"Can't find interface for IP address {ip_address}")
 
 
-def check_interface_status(host: Host) -> list:
+def get_route_from_interface(host: Host, interface: dict, source: netaddr.IPNetwork, destination: netaddr.IPNetwork) \
+        -> bool:
+    """
+    Get the route from a host based on the interface.
+    :param destination: The destination network/IP address
+    :param source: The source network/IP address
+    :param host: The host object
+    :param interface: The interface object
+    :return: The route object if found, None if not found
+    """
+    for table in host.routes:
+        if 'vrf' not in table:
+            for route in table['address_families']:
+                if route['routes'][0]['next_hops'][0]['forward_router_address'] == interface['ipv4'][0]['address']:
+                    if check_network_contains_network(str(source), route['routes'][0]['dest']) or \
+                            check_network_contains_network(str(destination), route['routes'][0]['dest']):
+                        return True
+    return False
+
+
+def check_interface_status(host: Host, source: netaddr.IPNetwork, destination: netaddr.IPNetwork) -> list:
     """
     Get all interface statutes from a host
+    :param destination: The source network which needs to be enabled
+    :param source: The destination network which needs to be enabled
     :param host: The host object
     :return: list of interface statuses
     """
     down_interfaces = []
     for interface in host.interfaces:
         if 'ipv4' in interface and not interface['enabled']:
-            down_interfaces.append({'name': interface['name'], 'description': interface['description']})
+            if get_route_from_interface(host, interface, source, destination):
+                down_interfaces.append({'name': interface['name'], 'description': interface['description']})
     return down_interfaces
 
 
@@ -80,15 +104,6 @@ def get_new_edges(initial_graph, current_graph) -> List[Tuple[str, str]]:
     return get_graph_difference(current_graph, initial_graph).edges
 
 
-def get_removed_edges(initial_graph, current_graph):
+def get_removed_edges(initial_graph: nx.DiGraph, current_graph: nx.DiGraph):
     # Get which edges were removed from the current graph, compared to the initial state.
     return get_graph_difference(initial_graph, current_graph).edges
-
-
-def add_new_and_removed_edges(new_edges, removed_edges, tmp_graph):
-    for source, destination in new_edges:
-        tmp_graph.add_edge(source, destination, color='green', weight=2, style='--')
-        logger.debug(f"Adding new edge ({source}, {destination}) to graph")
-    for source, destination in removed_edges:
-        tmp_graph.set_edge_attributes(tmp_graph, {(source, destination): {"color": 'red'}})
-        logger.debug(f"Updating removed edge attribute ({source}, {destination}) from graph")

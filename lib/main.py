@@ -20,7 +20,7 @@ def setup_logging():
     Setup logging for the project
     :return: None
     """
-    default_formatter = logging.Formatter('[%(asctime)s] - %(name)s - %(levelness)s - %(message)s')
+    default_formatter = logging.Formatter('[%(asctime)s] - %(name)s - %(levelname)s - %(message)s')
     logger.setLevel(LOGGER_LEVEL)
     # Add stdout handler
     handler = logging.StreamHandler(sys.stdout)
@@ -98,9 +98,10 @@ def main():
     # Run this playbook every time and get facts from this
     results = gather_ios_facts()
 
+    test_case_name = Path(args.playbook).stem if args.playbook else "Network analyzation"
     # Run the network analyzer on the gathered facts
     analyzer = NetworkAnalyzer(
-        results, source=args.source, destination=args.destination, test_case_name=Path(args.playbook).stem
+        results, source=args.source, destination=args.destination, test_case_name=test_case_name
     )
     network_state = analyzer.detect_loop_in_route()
     logger.debug(network_state)
@@ -111,31 +112,48 @@ def main():
     #   Next hop is in the network, but the address has some typo
     #   The netmask is not correct (Longer netmask can cause real problems, first just warn for shorter netmask)
     result = False
-    if network_state['loop'] is False and network_state['affected'] is False:
-        logger.info("No problems found in network")
-        print(Fore.GREEN + "There are no loops or ruptures in the network! Network seems healthy!")
+    if network_state['source']['loop'] is False and network_state['source']['affected'] is False \
+            and network_state['destination']['loop'] is False and network_state['destination']['affected'] is False:
+        logger.info("No problems found in network (source/destination side)")
+        print(Fore.GREEN + "There are no loops or ruptures in the network in either direction! Network seems healthy!")
         print(
             Fore.CYAN + f"Current route from {str(analyzer.source.network)} to "
                         f"{str(analyzer.destination.network)}: {', '.join(analyzer.get_shortest_path())}"
         )
-    elif network_state['loop'] is False and network_state['affected'] is True:
+        result = True
+    elif (network_state['source']['loop'] is False and network_state['source']['affected'] is True) \
+            or (network_state['destination']['loop'] is False and network_state['destination']['affected'] is True):
         print(Fore.YELLOW + "There are no loops in the network, but there is a rupture. "
                             "If auto-repair is enabled, I will try to fix it!")
         logger.warning("Rupture found in network")
         if args.autofix:
             logger.debug("Auto-fixing rupture")
-            print(Fore.RED + "Auto-fixing errors")
+            print(Fore.RED + "Auto-fixing rupture")
             result = analyzer.fix_rupture()
         else:
             logger.debug("No auto-fixing rupture")
             print(Fore.CYAN + "Summary status of the network can be seen in the generated graph")
-    elif network_state['loop'] is True and network_state['affected'] is False:
+    elif (network_state['source']['loop'] is True and network_state['source']['affected'] is False) \
+            or (network_state['destination']['loop'] is True and network_state['destination']['affected'] is False):
         print(Fore.YELLOW + "There is a loop in the network, but it is not affecting the currently specified route!")
         print(Fore.MAGENTA + f"Current loop: {', '.join(network_state['members'])}")
+        if args.autofix:
+            logger.debug("Auto-fixing non-affecting loop")
+            print(Fore.YELLOW + "Auto-fixing rupture")
+        else:
+            logger.debug("No auto-fixing non-affecting loop")
+            print(Fore.CYAN + "Summary status of the network can be seen in the generated graph")
     elif network_state['loop'] is True and network_state['affected'] is True:
-        print(Fore.RED + "There is a loop in the network and the current route is affected!")
+        logger.debug("Loop found in network")
+        print(Fore.RED + "There is a loop in the network and the current route is affected! If auto-repair is enabled, "
+                         "I will try to eliminate the loop!")
         print(Fore.MAGENTA + f"Current loop: {', '.join(network_state['members'])}")
-        analyzer.fix_loop()
+        if args.autofix:
+            logger.debug("Auto-fixing loop")
+            analyzer.fix_loop()
+        else:
+            logger.debug("No auto-fixing loop")
+            print(Fore.CYAN + "Summary status of the network can be seen in the generated graph")
 
     # Plot the graph. If issues found, highlight the problematic node/edge and also indicate possible solutions as well.
     analyzer.plot_graph(filename=args.filename)
