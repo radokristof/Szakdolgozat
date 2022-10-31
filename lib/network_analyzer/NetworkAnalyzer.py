@@ -13,7 +13,7 @@ from network_analyzer.Host import Host, SourceHost, DestinationHost
 from network_analyzer.exception.exception import NodeNotFoundException, NetworkSourceDestinationException, \
     NetworkMultipleDefinitionException
 from utils.graph import get_interface_status_from_route, check_interface_status, check_source_destination, \
-    get_new_edges, get_removed_edges
+    check_loop_type, generate_tmp_graph
 from utils.ip import compare_cidr_and_ip_address
 
 logger = logging.getLogger(__name__)
@@ -203,25 +203,15 @@ class NetworkAnalyzer:
         for loop in nx.simple_cycles(self.graph_from_destination):
             destination_loop = loop.copy()
         # The source_loop or destination_loop var is empty if there are no loops in the network
-        loops['source'] = self.check_loop_type(source_loop)
-        loops['destination'] = self.check_loop_type(destination_loop)
+        loops['source'] = check_loop_type(
+            graph=self.graph_from_source, loop=source_loop,
+            source=self.source.hostname, destination=self.destination.hostname
+        )
+        loops['destination'] = check_loop_type(
+            graph=self.graph_from_destination, loop=destination_loop,
+            source=self.destination.hostname, destination=self.source.hostname
+        )
         return loops
-
-    def check_loop_type(self, loop):
-        if loop:
-            if nx.has_path(self.graph_from_source, self.source.hostname, self.destination.hostname):
-                # It has a loop, but the path is clear towards the destination, so the current route is unaffected.
-                return {"loop": True, "affected": False, "members": loop}
-            # It has a loop and the path is not clear towards the destination.
-            return {"loop": True, "affected": True, "members": loop}
-        # Check if there is no loop, the route is still functional
-        else:
-            # If it has path and there is no loop, the network seems healthy.
-            if nx.has_path(self.graph_from_source, self.source.hostname, self.destination.hostname):
-                return {"loop": False, "affected": False}
-            # No loop, but there is no route to the destination - maybe a rupture in the route.
-            else:
-                return {"loop": False, "affected": True}
 
     def find_host_with_ip_address(self, ip_address: str) -> Host:
         """
@@ -253,28 +243,24 @@ class NetworkAnalyzer:
         """
         logger.debug("Create plot of graph")
         # Get source graph new and removed edges
-        source_tmp_graph = self.graph_from_source
-        source_new_edges = get_new_edges(self.initial_graph_from_source, self.graph_from_source)
-        source_removed_edges = get_removed_edges(self.initial_graph_from_source, self.graph_from_source)
-        source_tmp_graph.add_edges_from(source_new_edges, color='green', weight=2, style='--', label='Added edge')
-        for source, destination in source_removed_edges:
-            nx.set_edge_attributes(source_tmp_graph, {(source, destination): {"color": 'red', "label": 'Removed edge'}})
+        source_tmp_graph = generate_tmp_graph("source", self.graph_from_source, self.initial_graph_from_source)
 
         # Get destination graph new and removed edges
-        destination_tmp_graph = self.graph_from_destination
-        destination_new_edges = get_new_edges(self.initial_graph_from_destination, self.graph_from_destination)
-        destination_removed_edges = get_removed_edges(self.initial_graph_from_destination, self.graph_from_destination)
-        destination_tmp_graph.add_edges_from(destination_new_edges, color='red', weight=2, style='--')
-        for source, destination in destination_removed_edges:
-            nx.set_edge_attributes(destination_tmp_graph, {(source, destination): {"color": 'red',
-                                                                                   "label": 'Removed edge'}})
+        destination_tmp_graph = generate_tmp_graph("destination", self.graph_from_destination,
+                                                   self.initial_graph_from_destination)
 
         # Combine the two graph into a single graph
         tmp_graph = nx.compose(source_tmp_graph, destination_tmp_graph)
+        logger.debug(f"Temporary graph edges: {tmp_graph.edges(data=True)}")
+
         # Get the attributes of the nodes
         colors = nx.get_edge_attributes(tmp_graph, 'color').values()
         weights = nx.get_edge_attributes(tmp_graph, 'weight').values()
         styles = nx.get_edge_attributes(tmp_graph, 'style').values()
+
+        logger.debug(f"Colors: {colors}")
+        logger.debug(f"Weights: {weights}")
+        logger.debug(f"Styles: {styles}")
 
         node_color = {
             'PC-S': 'tab:green',
@@ -292,7 +278,7 @@ class NetworkAnalyzer:
         # Add title to plot
         plt.figure(3, figsize=(6, 6))
         plt.suptitle(f"Summary of {self.test_case}")
-        plt.title(f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        plt.title(f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
         pos = nx.circular_layout(tmp_graph, scale=1)
         nx.draw_networkx_nodes(
@@ -300,7 +286,7 @@ class NetworkAnalyzer:
         )
         nx.draw_networkx_edges(
             tmp_graph, pos=pos, edge_color=colors, width=list(weights), style=list(styles),
-            arrowsize=20,  connectionstyle='arc3, rad = 0.1'
+            arrowsize=20, connectionstyle='arc3, rad = 0.1'
         )
         nx.draw_networkx_labels(tmp_graph, pos=pos, font_size=10, font_color='whitesmoke')
 
@@ -326,6 +312,7 @@ class NetworkAnalyzer:
             down_interfaces = check_interface_status(host, self.source.network, self.destination.network)
             if down_interfaces:
                 all_down_interfaces[host.hostname] = down_interfaces
+        logger.debug(f"Down interfaces: {all_down_interfaces}")
         # Enable all down interface
         enabled_at_least_one_interface = False
         for hostname, down_interfaces in all_down_interfaces.items():
@@ -336,6 +323,7 @@ class NetworkAnalyzer:
             )
             enabled_at_least_one_interface = True
         if enabled_at_least_one_interface:
+            logger.debug("Enabled at least one interface")
             # Check if the enabling helped to solve the rupture.
             # We need to gather ios facts again and recreate the NetworkAnalyzer instance.
             self.refresh_network()
@@ -344,6 +332,12 @@ class NetworkAnalyzer:
                 logger.info("Interfaces enabled - network fixed")
                 return True
         logger.info("Continuing with fixes - enabling interfaces was not enough")
+        missing_routes = {}
+        # Check if there are missing routes
+        for host in self.hosts:
+
+            return True
+        return False
 
     def fix_loop(self):
         logger.debug("Init fixing loop")

@@ -1,8 +1,8 @@
 import logging
 from typing import Union, List, Tuple
-import networkx as nx
+
 import netaddr
-from matplotlib.lines import Line2D
+import networkx as nx
 
 from network_analyzer.Host import Host
 from network_analyzer.exception.exception import InterfaceNotFound
@@ -43,7 +43,8 @@ def get_route_from_interface(host: Host, interface: dict, source: netaddr.IPNetw
     for table in host.routes:
         if 'vrf' not in table:
             for route in table['address_families']:
-                if route['routes'][0]['next_hops'][0]['forward_router_address'] == interface['ipv4'][0]['address']:
+                if check_network_contains_ip(route['routes'][0]['next_hops'][0]['forward_router_address'],
+                                             interface['ipv4'][0]['address']):
                     if check_network_contains_network(str(source), route['routes'][0]['dest']) or \
                             check_network_contains_network(str(destination), route['routes'][0]['dest']):
                         return True
@@ -107,3 +108,36 @@ def get_new_edges(initial_graph, current_graph) -> List[Tuple[str, str]]:
 def get_removed_edges(initial_graph: nx.DiGraph, current_graph: nx.DiGraph):
     # Get which edges were removed from the current graph, compared to the initial state.
     return get_graph_difference(initial_graph, current_graph).edges
+
+
+def check_loop_type(graph: nx.DiGraph, loop: List[str], source: str, destination: str) -> dict:
+    if loop:
+        if nx.has_path(graph, source, destination):
+            # It has a loop, but the path is clear towards the destination, so the current route is unaffected.
+            return {"loop": True, "affected": False, "members": loop}
+        # It has a loop and the path is not clear towards the destination.
+        return {"loop": True, "affected": True, "members": loop}
+    # Check if there is no loop, the route is still functional
+    else:
+        # If it has path and there is no loop, the network seems healthy.
+        if nx.has_path(graph, source, destination):
+            return {"loop": False, "affected": False}
+        # No loop, but there is no route to the destination - maybe a rupture in the route.
+        else:
+            return {"loop": False, "affected": True}
+
+
+def generate_tmp_graph(name, graph, initial_graph):
+    tmp_graph = graph
+    new_edges = get_new_edges(initial_graph, graph)
+    removed_edges = get_removed_edges(initial_graph, graph)
+    tmp_graph.add_edges_from(new_edges, color='green', weight=2, style='--', label='Added edge')
+    for source, destination in removed_edges:
+        nx.set_edge_attributes(tmp_graph, {(source, destination): {"color": 'red',
+                                                                   "label": 'Removed edge',
+                                                                   "style": '--'
+                                                                   }})
+    logger.debug(f"{name} new edges: {new_edges}")
+    logger.debug(f"{name} removed edges: {removed_edges}")
+    logger.debug(f"{name} graph edges: {tmp_graph.edges(data=True)}")
+    return tmp_graph

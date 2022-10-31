@@ -12,24 +12,23 @@ from ansible_api.playbook import run_playbook
 from network_analyzer.NetworkAnalyzer import NetworkAnalyzer
 
 logger = logging.getLogger()
-LOGGER_LEVEL = logging.DEBUG
 
 
-def setup_logging():
+def setup_logging(log_level: str):
     """
     Setup logging for the project
     :return: None
     """
     default_formatter = logging.Formatter('[%(asctime)s] - %(name)s - %(levelname)s - %(message)s')
-    logger.setLevel(LOGGER_LEVEL)
+    logger.setLevel(log_level)
     # Add stdout handler
     handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(LOGGER_LEVEL)
+    handler.setLevel(log_level)
     handler.setFormatter(default_formatter)
     logger.addHandler(handler)
 
     # Add file handler
-    handler = logging.FileHandler("analyzer.log", 'w+')
+    handler = logging.FileHandler("analyzer.log", mode='a', encoding='utf-8', delay=False)
     handler.setLevel(logging.INFO)
     handler.setFormatter(default_formatter)
     logger.addHandler(handler)
@@ -56,8 +55,12 @@ def setup_parser():
     parser.add_argument('--auto-fix', dest="autofix", action='store_true', help="Fix the detected errors")
     parser.add_argument('--no-auto-fix', dest="autofix", action="store_false", help="Just report detected errors")
     parser.add_argument(
-        '--filename', dest="filename", default=f"plot_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.png",
+        '-f', '--filename', dest="filename", default=f"plot_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.png",
         help="Filename of the plotted network (PNG)"
+    )
+    parser.add_argument(
+        '-l', '--log-level', dest="loglevel",
+        default="INFO", help="Logging level in CLI (check python.logging for more info)"
     )
     parser.set_defaults(autofix=True)
     return parser.parse_args()
@@ -66,8 +69,8 @@ def setup_parser():
 def main():
     # Init colorama, setup logging
     init(autoreset=True)
-    setup_logging()
     args = setup_parser()
+    setup_logging(args.loglevel)
 
     # Set Ansible cfg env variable
     os.environ["ANSIBLE_CONFIG"] = os.path.abspath("../ansible/ansible.cfg")
@@ -158,19 +161,20 @@ def main():
     # Plot the graph. If issues found, highlight the problematic node/edge and also indicate possible solutions as well.
     analyzer.plot_graph(filename=args.filename)
 
-    if result:
-        logger.info("Finished successfully")
-        print(Fore.GREEN + "Problems fixed in network. It should be functional now!")
-        print(
-            Style.DIM + Fore.WHITE + "For additional information, "
-                                     "what was fixed/replaced see the attached graph of the network or the logs!"
-        )
-    else:
-        logger.error("Problems can't be fixed automatically")
-        print(
-            Fore.RED + "Problems cannot be fixed. Check them manually "
-                       "or try running the program again with different source/destination parameters"
-        )
+    if args.autofix:
+        if result:
+            logger.info("Finished successfully")
+            print(Fore.GREEN + "Problems fixed in network. It should be functional now!")
+            print(
+                Style.DIM + Fore.WHITE + "For additional information, "
+                                         "what was fixed/replaced see the attached graph of the network or the logs!"
+            )
+        else:
+            logger.error("Problems can't be fixed automatically")
+            print(
+                Fore.RED + "Problems cannot be fixed. Check them manually "
+                           "or try running the program again with different source/destination parameters"
+            )
 
     print(Fore.CYAN + "Program finished, exiting!")
     print(Fore.YELLOW + Style.DIM + "Bye!")
