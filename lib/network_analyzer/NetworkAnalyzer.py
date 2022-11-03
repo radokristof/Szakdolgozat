@@ -313,7 +313,7 @@ class NetworkAnalyzer:
             if down_interfaces:
                 all_down_interfaces[host.hostname] = down_interfaces
         logger.debug(f"Down interfaces: {all_down_interfaces}")
-        # Enable all down interface
+        # Enable all filtered down interface
         enabled_at_least_one_interface = False
         for hostname, down_interfaces in all_down_interfaces.items():
             logger.debug(f"Enabling interfaces {down_interfaces} on host {hostname}")
