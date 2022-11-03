@@ -14,7 +14,7 @@ from network_analyzer.exception.exception import NodeNotFoundException, NetworkS
     NetworkMultipleDefinitionException
 from utils.graph import get_interface_status_from_route, check_interface_status, check_source_destination, \
     check_loop_type, generate_tmp_graph
-from utils.ip import compare_cidr_and_ip_address
+from utils.ip import compare_cidr_and_ip_address, check_network_contains_ip
 
 logger = logging.getLogger(__name__)
 
@@ -345,9 +345,30 @@ class NetworkAnalyzer:
         missing_routes = {}
         # Check if there are missing routes
         for host in self.hosts:
-
+            self.check_missing_interface_route(host, self.source.network, self.destination.network)
             return True
         return False
+
+    def traverse_route(self, source_node: str, destination_node: str):
+        pass
+
+    def check_missing_interface_route(self, host: Host,
+                                      source_network: netaddr.IPNetwork, destination_network: netaddr.IPNetwork) -> None:
+        missing_routes = {}
+        for interface in host.interfaces:
+            if 'ipv4' in interface:
+                addr = interface['ipv4'][0]['address']
+                found = False
+                for table in host.routes:
+                    if 'vrf' not in table:
+                        for route in table['address_families']:
+                            if check_network_contains_ip(route['routes'][0]['next_hops'][0]['forward_router_address'],
+                                                         addr):
+                                logger.debug(f"Found route for {addr} in {host.hostname}")
+                                found = True
+                if not found:
+                    logger.debug(f"Missing route for {addr} in {host.hostname}")
+                    missing_routes[host.hostname] = addr
 
     def fix_loop(self):
         logger.debug("Init fixing loop")
