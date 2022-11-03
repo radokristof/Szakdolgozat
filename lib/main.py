@@ -14,7 +14,7 @@ from network_analyzer.NetworkAnalyzer import NetworkAnalyzer
 logger = logging.getLogger()
 
 
-def setup_logging(log_level: str):
+def setup_logging(log_level: str) -> None:
     """
     Setup logging for the project
     :return: None
@@ -37,7 +37,7 @@ def setup_logging(log_level: str):
     logging.getLogger('matplotlib').setLevel(logging.INFO)
 
 
-def setup_parser():
+def setup_parser() -> argparse.Namespace:
     """
     Set CLI parser
     :return: The parsed arguments
@@ -66,7 +66,7 @@ def setup_parser():
     return parser.parse_args()
 
 
-def main():
+def main() -> None:
     # Init colorama, setup logging
     init(autoreset=True)
     args = setup_parser()

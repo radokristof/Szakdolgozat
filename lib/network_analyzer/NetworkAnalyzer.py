@@ -231,7 +231,7 @@ class NetworkAnalyzer:
         # Raise error if the current IP address cannot be found in the network.
         raise NodeNotFoundException(f"Not found {ip_address}")
 
-    def plot_graph(self, filename: str):
+    def plot_graph(self, filename: str) -> None:
         """
         Plot the graph to a file
         Used for debugging and creating visualizations for thesis.
@@ -295,15 +295,25 @@ class NetworkAnalyzer:
         logger.info(f"Plot saved to file {filename}!")
 
     def get_shortest_path(self) -> list:
-        # Get the shortest path in a graph.
+        """
+        Get the shortest path in a graph.
+        :return:
+        """
         return nx.shortest_path(self.graph_from_source, self.source.hostname, self.destination.hostname)
 
     def refresh_network(self):
-        # Gather facts and reinitialize network
+        """
+        Gather facts and reinitialize network
+        :return: None
+        """
         results = gather_ios_facts()
         self._refresh(results)
 
     def fix_rupture(self) -> bool:
+        """
+
+        :return:
+        """
         logger.debug("Init fixing rupture")
         # Check if configured interfaces are up
         # Collect down interfaces (which has in IP address configured)

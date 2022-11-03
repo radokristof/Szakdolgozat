@@ -3,6 +3,7 @@ from typing import Union, List, Tuple
 
 import netaddr
 import networkx as nx
+from networkx.classes.reportviews import OutEdgeView
 
 from network_analyzer.Host import Host
 from network_analyzer.exception.exception import InterfaceNotFound
@@ -16,7 +17,7 @@ def get_interface_status_from_route(host: Host, ip_address: str) -> bool:
     Check an interface enabled status based on host IP addresses.
     Returns the interface status in a host based on the IP address of the next-hop interface.
     The IP address will be checked if the current interface network contains that IP address.
-    If the IP address does not match any interface on the current host, InterfaceNotFound error will be raised.
+    If the IP address does not match any interface on the current host, InterfaceNotFound error will be raised
     :param host: The host object with interfaces
     :param ip_address: The IP address to check
     :return: True if the interface of that IP address is enabled, False if it is disabled
@@ -33,7 +34,7 @@ def get_interface_status_from_route(host: Host, ip_address: str) -> bool:
 def get_route_from_interface(host: Host, interface: dict, source: netaddr.IPNetwork, destination: netaddr.IPNetwork) \
         -> bool:
     """
-    Get the route from a host based on the interface.
+    Get the route from a host based on the interface
     :param destination: The destination network/IP address
     :param source: The source network/IP address
     :param host: The host object
@@ -67,10 +68,10 @@ def check_interface_status(host: Host, source: netaddr.IPNetwork, destination: n
     return down_interfaces
 
 
-def get_graph_difference(new_graph, old_graph):
+def get_graph_difference(new_graph: nx.DiGraph, old_graph: nx.DiGraph) -> nx.DiGraph:
     """
     Get difference between two graphs.
-    This will show which edges exist in the new graph, which is not in the old graph.
+    This will show which edges exist in the new graph, which is not in the old graph
     :param new_graph: The newer graph where new edges/nodes might be added
     :param old_graph: The older/initial graph which will be compared to the newer one.
     :return:
@@ -100,17 +101,35 @@ def check_source_destination(interface: dict, source: netaddr.IPNetwork, destina
     return None
 
 
-def get_new_edges(initial_graph, current_graph) -> List[Tuple[str, str]]:
-    # Get which edges were added to the current graph, compared to the initial state.
+def get_new_edges(initial_graph, current_graph) -> OutEdgeView:
+    """
+    Get which edges were added to the current graph, compared to the initial state
+    :param initial_graph:
+    :param current_graph:
+    :return:
+    """
     return get_graph_difference(current_graph, initial_graph).edges
 
 
-def get_removed_edges(initial_graph: nx.DiGraph, current_graph: nx.DiGraph):
-    # Get which edges were removed from the current graph, compared to the initial state.
+def get_removed_edges(initial_graph: nx.DiGraph, current_graph: nx.DiGraph) -> OutEdgeView:
+    """
+    Get which edges were removed from the current graph, compared to the initial state
+    :param initial_graph:
+    :param current_graph:
+    :return:
+    """
     return get_graph_difference(initial_graph, current_graph).edges
 
 
 def check_loop_type(graph: nx.DiGraph, loop: List[str], source: str, destination: str) -> dict:
+    """
+
+    :param graph:
+    :param loop:
+    :param source:
+    :param destination:
+    :return:
+    """
     if loop:
         if nx.has_path(graph, source, destination):
             # It has a loop, but the path is clear towards the destination, so the current route is unaffected.
@@ -127,7 +146,14 @@ def check_loop_type(graph: nx.DiGraph, loop: List[str], source: str, destination
             return {"loop": False, "affected": True}
 
 
-def generate_tmp_graph(name, graph, initial_graph):
+def generate_tmp_graph(name: str, graph: nx.DiGraph, initial_graph: nx.DiGraph) -> nx.DiGraph:
+    """
+
+    :param name:
+    :param graph:
+    :param initial_graph:
+    :return:
+    """
     tmp_graph = graph
     new_edges = get_new_edges(initial_graph, graph)
     removed_edges = get_removed_edges(initial_graph, graph)
