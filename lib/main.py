@@ -87,13 +87,13 @@ def main() -> None:
     print(Fore.CYAN + "Starting Network Analyzer Tool")
     print(Fore.GREEN + f"Source IP address/network: {args.source}")
     print(Fore.GREEN + f"Destination IP address/network: {args.destination}")
-    logger.info("Running supplied playbook")
 
     # Run the selected playbook if there is a specified playbook
     # If the current network needs some pre-requisite setup,
     # you can specify that playbook which will be run before querying the network state
     # and making assumptions from the received state.
     if args.playbook:
+        logger.info("Running supplied playbook")
         run_playbook(playbook_file=os.path.abspath(args.playbook), data_dir=default_data_dir)
         logger.debug("Supplied playbook finished")
 
@@ -114,7 +114,8 @@ def main() -> None:
     # Possible loop solutions: 
     #   Next hop is in the network, but the address has some typo
     #   The netmask is not correct (Longer netmask can cause real problems, first just warn for shorter netmask)
-    result = False
+    problem_found = False
+    problem_fixed = False
     if network_state['source']['loop'] is False and network_state['source']['affected'] is False \
             and network_state['destination']['loop'] is False and network_state['destination']['affected'] is False:
         logger.info("No problems found in network (source/destination side)")
@@ -123,7 +124,7 @@ def main() -> None:
             Fore.CYAN + f"Current route from {str(analyzer.source.network)} to "
                         f"{str(analyzer.destination.network)}: {', '.join(analyzer.get_shortest_path())}"
         )
-        result = True
+        problem_found = True
     elif (network_state['source']['loop'] is False and network_state['source']['affected'] is True) \
             or (network_state['destination']['loop'] is False and network_state['destination']['affected'] is True):
         print(Fore.YELLOW + "There are no loops in the network, but there is a rupture. "
@@ -132,10 +133,11 @@ def main() -> None:
         if args.autofix:
             logger.debug("Auto-fixing rupture")
             print(Fore.RED + "Auto-fixing rupture")
-            result = analyzer.fix_rupture()
+            problem_fixed = analyzer.fix_rupture()
         else:
             logger.debug("No auto-fixing rupture")
             print(Fore.CYAN + "Summary status of the network can be seen in the generated graph")
+        problem_found = True
     elif (network_state['source']['loop'] is True and network_state['source']['affected'] is False) \
             or (network_state['destination']['loop'] is True and network_state['destination']['affected'] is False):
         print(Fore.YELLOW + "There is a loop in the network, but it is not affecting the currently specified route!")
@@ -146,6 +148,7 @@ def main() -> None:
         else:
             logger.debug("No auto-fixing non-affecting loop")
             print(Fore.CYAN + "Summary status of the network can be seen in the generated graph")
+        problem_found = True
     elif network_state['loop'] is True and network_state['affected'] is True:
         logger.debug("Loop found in network")
         print(Fore.RED + "There is a loop in the network and the current route is affected! If auto-repair is enabled, "
@@ -157,13 +160,16 @@ def main() -> None:
         else:
             logger.debug("No auto-fixing loop")
             print(Fore.CYAN + "Summary status of the network can be seen in the generated graph")
+        problem_found = True
 
-    # Plot the graph. If issues found, highlight the problematic node/edge and also indicate possible solutions as well.
-    analyzer.plot_graph(filename=args.filename)
-
-    if args.autofix:
-        if result:
-            logger.info("Finished successfully")
+    if problem_found:
+        logger.info("Finished successfully")
+        # Plot the graph. If issues found,
+        # highlight the problematic node/edge and also indicate possible solutions as well.
+        analyzer.plot_graph(filename=args.filename)
+        print(Fore.GREEN + "Finished successfully")
+        if problem_fixed:
+            logger.info("Problems fixed in network")
             print(Fore.GREEN + "Problems fixed in network. It should be functional now!")
             print(
                 Style.DIM + Fore.WHITE + "For additional information, "
@@ -175,7 +181,9 @@ def main() -> None:
                 Fore.RED + "Problems cannot be fixed. Check them manually "
                            "or try running the program again with different source/destination parameters"
             )
-
+    else:
+        logger.debug("Problems cannot be determined by the program")
+        print(Fore.RED + "Problems cannot be determined by the program. Check them manually!")
     print(Fore.CYAN + "Program finished, exiting!")
     print(Fore.YELLOW + Style.DIM + "Bye!")
 

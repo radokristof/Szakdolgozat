@@ -167,3 +167,31 @@ def generate_tmp_graph(name: str, graph: nx.DiGraph, initial_graph: nx.DiGraph) 
     logger.debug(f"{name} removed edges: {removed_edges}")
     logger.debug(f"{name} graph edges: {tmp_graph.edges(data=True)}")
     return tmp_graph
+
+
+def check_missing_interface_route(host: Host) -> list:
+    missing_routes = []
+    for interface in host.interfaces:
+        if 'ipv4' in interface:
+            addr = interface['ipv4'][0]['address']
+            found = False
+            for table in host.routes:
+                for route in table['address_families']:
+                    if check_network_contains_ip(route['routes'][0]['next_hops'][0]['forward_router_address'],
+                                                 addr):
+                        logger.debug(f"Found route for {addr} in {host.hostname}")
+                        found = True
+            if not found:
+                logger.debug(f"Missing route for {addr} in {host.hostname}")
+                missing_routes.append(addr)
+    return missing_routes
+
+
+def get_interface_ip_within_ip_network(host: Host, ip_addresses: List[str]) -> Union[str, None]:
+    for interface in host.interfaces:
+        if 'ipv4' in interface:
+            addr = interface['ipv4'][0]['address']
+            for ip_address in ip_addresses:
+                if check_network_contains_network(addr, ip_address):
+                    return addr
+    return None

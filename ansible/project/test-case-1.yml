@@ -3,6 +3,8 @@
   ansible.builtin.import_playbook: initial-network.yml
 
 - name: "TEST-CASE #1 -- Remove a route from the path between PC1 and PC2"
+  # Source: 10.0.1.2/24
+  # Destination: 10.0.2.2/24
   gather_facts: False
   hosts: R2
   vars_files:

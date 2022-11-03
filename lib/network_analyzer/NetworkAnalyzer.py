@@ -13,8 +13,8 @@ from network_analyzer.Host import Host, SourceHost, DestinationHost
 from network_analyzer.exception.exception import NodeNotFoundException, NetworkSourceDestinationException, \
     NetworkMultipleDefinitionException
 from utils.graph import get_interface_status_from_route, check_interface_status, check_source_destination, \
-    check_loop_type, generate_tmp_graph
-from utils.ip import compare_cidr_and_ip_address, check_network_contains_ip
+    check_loop_type, generate_tmp_graph, check_missing_interface_route, get_interface_ip_within_ip_network
+from utils.ip import compare_cidr_and_ip_address
 
 logger = logging.getLogger(__name__)
 
@@ -309,6 +309,13 @@ class NetworkAnalyzer:
         results = gather_ios_facts()
         self._refresh(results)
 
+    def check_fix(self):
+        self.refresh_network()
+        network_state = self.detect_loop_in_route()
+        if network_state['source']['affected'] is False and network_state['destination']['affected'] is False:
+            return True
+        return False
+
     def fix_rupture(self) -> bool:
         """
 
@@ -336,39 +343,72 @@ class NetworkAnalyzer:
             logger.debug("Enabled at least one interface")
             # Check if the enabling helped to solve the rupture.
             # We need to gather ios facts again and recreate the NetworkAnalyzer instance.
-            self.refresh_network()
-            network_state = self.detect_loop_in_route()
-            if network_state['source']['affected'] is False and network_state['destination']['affected'] is False:
+            fixed = self.check_fix()
+            if fixed:
                 logger.info("Interfaces enabled - network fixed")
                 return True
         logger.info("Continuing with fixes - enabling interfaces was not enough")
         missing_routes = {}
         # Check if there are missing routes
-        for host in self.hosts:
-            self.check_missing_interface_route(host, self.source.network, self.destination.network)
-            return True
+        # Forward route
+        rupture_node_source = self.traverse_route(self.graph_from_source, self.source.hostname, 'PC-D')
+        reverse_rupture_node_source = self.traverse_route(self.graph_from_source.reverse(copy=True),
+                                                          self.destination.hostname, 'PC-S')
+        missing_routes['source'] = (rupture_node_source, reverse_rupture_node_source)
+        logger.debug(f"Rupture in forward route: Between {rupture_node_source} and {reverse_rupture_node_source}")
+
+        # Reverse route
+        rupture_node_destination = self.traverse_route(self.graph_from_destination, self.destination.hostname, 'PC-S')
+        reverse_rupture_node_destination = self.traverse_route(self.graph_from_destination.reverse(copy=True),
+                                                               self.source.hostname, 'PC-D')
+        missing_routes['destination'] = (rupture_node_destination, reverse_rupture_node_destination)
+        logger.debug(
+            f"Rupture in reverse route: Between {rupture_node_destination} and {reverse_rupture_node_destination}"
+        )
+        fixed_route = False
+        for direction, edges in missing_routes.items():
+            if None not in edges:
+                source_host = [host for host in self.hosts if host.hostname == edges[0]][0]
+                destination_host = [host for host in self.hosts if host.hostname == edges[1]][0]
+                source_ips_without_route = check_missing_interface_route(source_host)
+                logger.debug(f"Source missing routes: {source_ips_without_route}")
+
+                next_hop_addr = get_interface_ip_within_ip_network(destination_host,
+                                                                   source_ips_without_route)
+                if next_hop_addr:
+                    logger.debug(f"Destination missing routes: {next_hop_addr}")
+                    run_task(
+                        role='cisco-config-static_routes', hosts=source_host.hostname,
+                        role_vars={'routes': [
+                            {
+                                'dest_address': str(
+                                    netaddr.IPNetwork(self.destination.network).cidr if direction == 'source'
+                                    else netaddr.IPNetwork(self.source.network).cidr),
+                                'next_hop': str(netaddr.IPNetwork(next_hop_addr).ip)
+                            }
+                        ]},
+                        data_dir=os.path.abspath('../ansible/')
+                    )
+                    fixed_route = True
+                else:
+                    logger.debug("No next hop address found. Cannot be fixed!")
+        if fixed_route:
+            fixed = self.check_fix()
+            if fixed:
+                logger.info("Missing route fixed")
+                return True
         return False
 
-    def traverse_route(self, source_node: str, destination_node: str):
-        pass
-
-    def check_missing_interface_route(self, host: Host,
-                                      source_network: netaddr.IPNetwork, destination_network: netaddr.IPNetwork) -> None:
-        missing_routes = {}
-        for interface in host.interfaces:
-            if 'ipv4' in interface:
-                addr = interface['ipv4'][0]['address']
-                found = False
-                for table in host.routes:
-                    if 'vrf' not in table:
-                        for route in table['address_families']:
-                            if check_network_contains_ip(route['routes'][0]['next_hops'][0]['forward_router_address'],
-                                                         addr):
-                                logger.debug(f"Found route for {addr} in {host.hostname}")
-                                found = True
-                if not found:
-                    logger.debug(f"Missing route for {addr} in {host.hostname}")
-                    missing_routes[host.hostname] = addr
+    def traverse_route(self, graph: nx.DiGraph, source_node: str, dest_node: str) -> Union[str, None]:
+        logger.debug(f"Traversing {source_node}")
+        neighbor = [n for n in graph.neighbors(source_node)]
+        if not neighbor:
+            logger.debug("Last node with neighbor found!")
+            return source_node
+        if neighbor[0] == dest_node:
+            logger.debug(f"Found destination ({neighbor[0]}), no route missing!")
+            return None
+        return self.traverse_route(graph, neighbor[0], dest_node)
 
     def fix_loop(self):
         logger.debug("Init fixing loop")
