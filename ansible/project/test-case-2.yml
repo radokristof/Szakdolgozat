@@ -2,23 +2,21 @@
 - name: "PRE-TASK -- Setup initial network"
   ansible.builtin.import_playbook: initial-network.yml
 
-- name: "TEST-CASE #2 -- Set incorrect next-hop parameter in R3 router"
-  # Source: 10.0.1.2/24
-  # Destination: 10.0.2.2/24
+- name: "TEST-CASE #2 -- Turn off an interface in the route"
+  # Source: 10.0.2.2/24
+  # Destination: 10.0.1.2/24
   gather_facts: False
-  hosts: R3
+  hosts: R1
   vars_files:
     - ../vars/test-case-2.yml
   
   tasks:
-    - name: "Set static route"
+    - name: "Change interface status on R1"
       ansible.builtin.include_role:
-        name: cisco-config-static_routes
+        name: cisco-config-interfaces
       vars:
-        routes: "{{ R3.routes }}"
+        interfaces: "{{ R1.interfaces }}"
 
 # Steps to eliminate this error:
 # 1. Get current config - check if routes exists considering if their interfaces are enabled or not!
 # 2. Go through interfaces - enable all of them which has an IP address and not enabled
-# 3. Check loops - if there is a loop, proceed to #4
-# 4.

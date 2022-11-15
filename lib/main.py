@@ -79,7 +79,10 @@ def main() -> None:
     # This is a remedy of ansible-runner (at least in Windows-WSL).
     # The file will be rewritten/recreated with wrong permissions,
     # so ansible-runner can't access it next time when running the program.
-    os.chmod(os.path.abspath("../ansible/project/main.json"), 0o666)
+    ansible_json_file_path = os.path.abspath("../ansible/project/main.json")
+    runner_json_file = Path(ansible_json_file_path)
+    if runner_json_file.exists():
+        os.chmod(ansible_json_file_path, 0o666)
 
     default_data_dir = os.path.abspath(args.datadir)
 
