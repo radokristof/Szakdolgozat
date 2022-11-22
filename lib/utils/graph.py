@@ -7,7 +7,7 @@ from networkx.classes.reportviews import OutEdgeView
 
 from network_analyzer.Host import Host
 from network_analyzer.exception.exception import InterfaceNotFound
-from utils.ip import check_network_contains_ip, check_network_contains_network
+from utils.ip import check_network_contains_ip, check_network_contains_network, compare_cidr_and_ip_address
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +23,21 @@ def get_interface_status_from_route(host: Host, ip_address: str) -> bool:
     :return: True if the interface of that IP address is enabled, False if it is disabled
     :raises: InterfaceNotFound if the IP address does not match any interface on the host
     """
-    logger.debug(f"Searching interface for IP address {ip_address}")
+    logger.debug(f"Searching interfaceRoute for IP address {ip_address}")
     for interface in host.interfaces:
         if 'ipv4' in interface:
             if check_network_contains_ip(ip_address, interface['ipv4'][0]['address']):
                 return interface['enabled']
+    raise InterfaceNotFound(f"Can't find interface for IP address {ip_address}")
+
+
+def get_interface_status_from_ip(hosts: List[Host], ip_address: str) -> bool:
+    logger.debug(f"Searching interfaceIp for IP address {ip_address}")
+    for host in hosts:
+        for interface in host.interfaces:
+            if 'ipv4' in interface:
+                if compare_cidr_and_ip_address(interface['ipv4'][0]['address'], ip_address):
+                    return interface['enabled']
     raise InterfaceNotFound(f"Can't find interface for IP address {ip_address}")
 
 

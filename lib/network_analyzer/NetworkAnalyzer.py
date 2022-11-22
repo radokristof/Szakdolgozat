@@ -13,7 +13,8 @@ from network_analyzer.Host import Host, SourceHost, DestinationHost
 from network_analyzer.exception.exception import NodeNotFoundException, NetworkSourceDestinationException, \
     NetworkMultipleDefinitionException
 from utils.graph import get_interface_status_from_route, check_interface_status, check_source_destination, \
-    check_loop_type, generate_tmp_graph, check_missing_interface_route, get_interface_ip_within_ip_network
+    check_loop_type, generate_tmp_graph, check_missing_interface_route, get_interface_ip_within_ip_network, \
+    get_interface_status_from_ip
 from utils.ip import compare_cidr_and_ip_address
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,7 @@ class NetworkAnalyzer:
         """
         self.hosts = []
         self.graph_from_source = nx.DiGraph()
+        self.graph_from_destination = nx.DiGraph()
         for hostname, host_facts in facts.items():
             logger.debug(f"Adding host {hostname}")
             self.hosts.append(Host(host_facts))
@@ -162,19 +164,21 @@ class NetworkAnalyzer:
             forward_router_address = route['routes'][0]['next_hops'][0]['forward_router_address']
             dest = netaddr.IPNetwork(route['routes'][0]['dest'])
             if dest == self.destination.network or dest == self.source.network:
-                # Also need to check if the current route next-hop interface is enabled.
+                # Need to check if the current route next-hop interface is enabled.
+                # Also need to check if the current route interface is enabled on the other router as well.
                 # If not enabled, don't add the route
                 # !!! Routes returned by Ansible is always there, even if the actual routing table does not contain it !
-                if get_interface_status_from_route(host, forward_router_address):
+                if get_interface_status_from_route(host, forward_router_address) and \
+                        get_interface_status_from_ip(self.hosts, forward_router_address):
                     if dest == self.destination.network:
                         edges_from_source.append(self.create_graph_edge(host, forward_router_address, forward=True))
-                        logger.debug(f"Adding forward edge for host {host.hostname}")
+                        logger.debug(f"Adding forward edge {edges_from_source[-1]} for host {host.hostname}")
                     if dest == self.source.network:
                         edges_from_destination.append(
                             self.create_graph_edge(host, forward_router_address, forward=True)
                         )
-                        logger.debug(f"Adding reverse edge for host {host.hostname}")
-        logger.debug(f"Edges for host {host.hostname}: {edges_from_source}")
+                        logger.debug(f"Adding reverse edge {edges_from_destination[-1]} for host {host.hostname}")
+        logger.debug(f"Edges for host {host.hostname}: {edges_from_source} {edges_from_destination}")
         return edges_from_source, edges_from_destination
 
     def create_pc_edge(self, host: Host, interface: dict) -> Union[Tuple[str, str], None]:
