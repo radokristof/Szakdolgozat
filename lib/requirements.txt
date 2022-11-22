@@ -1,5 +1,6 @@
 ansible
 ansible-runner
+ansible-pylibssh
 networkx
 matplotlib
 netaddr

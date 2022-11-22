@@ -128,6 +128,7 @@ def main() -> None:
                         f"{str(analyzer.destination.network)}: {', '.join(analyzer.get_shortest_path())}"
         )
         problem_found = True
+        problem_fixed = True
     elif (network_state['source']['loop'] is False and network_state['source']['affected'] is True) \
             or (network_state['destination']['loop'] is False and network_state['destination']['affected'] is True):
         print(Fore.YELLOW + "There are no loops in the network, but there is a rupture. "
@@ -185,7 +186,7 @@ def main() -> None:
                            "or try running the program again with different source/destination parameters"
             )
     else:
-        logger.debug("Problems cannot be determined by the program")
+        logger.warning("Problems cannot be determined by the program")
         print(Fore.RED + "Problems cannot be determined by the program. Check them manually!")
     print(Fore.CYAN + "Program finished, exiting!")
     print(Fore.YELLOW + Style.DIM + "Bye!")

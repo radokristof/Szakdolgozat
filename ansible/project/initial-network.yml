@@ -12,8 +12,8 @@
       register: ios_facts
   
   tasks:
-    # Interfész(ek) IP címeinek beállítása
-    # A megadott fájl alapján való interfész IP címek beállítása, routerenként, hostname alapján.
+    # Set interface IP addresses
+    # Set interfaces from the provided var file based on hostname
     - name: "Set initial interface IP"
       ansible.builtin.include_role:
         name: cisco-config-l3_interface
@@ -21,8 +21,8 @@
         interfaces: "{{ lookup('ansible.builtin.vars', ios_facts.ansible_facts.ansible_net_hostname).interfaces }}"
       when: ios_facts.ansible_facts.ansible_net_hostname is defined
     
-    # Statikus route-ok beállítása
-    # Szintén a fájlból kiolvasott route-ok kerülnek beállításra, routerenként, hostname alapján.
+    # Set static routes
+    # Also set from the var file based on hostname
     - name: "Set VRF mgmt route"
       ansible.builtin.include_role:
         name: cisco-config-static_routes_vrf
@@ -39,7 +39,7 @@
         state: merged
       when: ios_facts.ansible_facts.ansible_net_hostname is defined
     
-    # Az előbb beállított route-ok alapszintű tesztelése. Csak a két végpont közti router ellenőrzése ping-el.
+    # Test the routing between the endpoints. Only ran on R4 and R5
     - name: "Test reachability between R4 and R5"
       cisco.ios.ios_ping:
         source: "{{ lookup('ansible.builtin.vars', ios_facts.ansible_facts.ansible_net_hostname).ping.source }}"

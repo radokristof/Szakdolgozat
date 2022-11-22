@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-import ansible_runner # type: ignore
+import ansible_runner  # type: ignore
 
 from network_analyzer.exception.exception import PlaybookRunException
 
@@ -17,7 +17,7 @@ def run_playbook(playbook_file: str, data_dir: str) -> dict:
     """
     logger.info("Running playbook '{}' in data_dir '{}'".format(Path(playbook_file).name, Path(data_dir).name))
     r = ansible_runner.run(private_data_dir=data_dir, playbook=playbook_file)
-    logger.info("{}: {}".format(r.status, r.rc))
+    logger.info("{} ({})".format(r.status, r.rc))
     if r.status != "successful":
         raise PlaybookRunException(f"Playbook run failed {r.status}")
     logger.debug(r.stats)

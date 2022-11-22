@@ -16,5 +16,5 @@ def run_task(role: str, hosts: str, role_vars: dict, data_dir: str) -> None:
     """
     logger.info("Running task/role {} in data dir {}".format(Path(role).name, Path(data_dir).name))
     r = ansible_runner.run(private_data_dir=data_dir, role=role, hosts=hosts, role_vars=role_vars)
-    logger.info("{}: {}".format(r.status, r.rc))
+    logger.info("{} ({})".format(r.status, r.rc))
     logger.debug(r.stats)
