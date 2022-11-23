@@ -16,7 +16,3 @@
         name: cisco-config-interfaces
       vars:
         interfaces: "{{ R1.interfaces }}"
-
-# Steps to eliminate this error:
-# 1. Get current config - check if routes exists considering if their interfaces are enabled or not!
-# 2. Go through interfaces - enable all of them which has an IP address and not enabled

@@ -1,3 +1,5 @@
+from typing import Union
+
 import netaddr  # type: ignore
 
 
@@ -21,11 +23,33 @@ def check_network_contains_ip(ip_address: str, network: str) -> bool:
     return netaddr.IPAddress(ip_address) in netaddr.IPNetwork(network)
 
 
-def check_network_contains_network(contained_network: str, containing_network: str) -> bool:
+def check_network_contains_network(contained_network: Union[str, netaddr.IPNetwork],
+                                   containing_network: Union[str, netaddr.IPNetwork]) -> bool:
     """
     Check if the contained_network is in the containing network (Eg.: 192.168.1.0/24 is in 192.168.1.0/22)
+    Filter default routes
     :param contained_network: The network which should be contained
     :param containing_network: The network which should contain the contained_network
     :return: True if the containing_network contains the contained_network, False if it does not
     """
+    if netaddr.IPNetwork(containing_network) == netaddr.IPNetwork('0.0.0.0/0'):
+        return False
     return netaddr.IPNetwork(contained_network) in netaddr.IPNetwork(containing_network)
+
+
+def check_network_is_in_supernet(contained_network: Union[str, netaddr.IPNetwork],
+                                 containing_network: Union[str, netaddr.IPNetwork]) -> bool:
+    """
+    Check if the provided network is in a private supernet (Eg.:
+    """
+    net = netaddr.IPNetwork(contained_network)
+    private = net.is_private()
+    supernets = net.supernet()
+    network_to_check = netaddr.IPNetwork(containing_network)
+    for network in supernets:
+        # Only check if the provided network is private and the checked network is also private
+        # If the provided network is not private, always check
+        if (private and network.is_private()) or not private:
+            if network_to_check == network:
+                return True
+    return False

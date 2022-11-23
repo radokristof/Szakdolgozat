@@ -7,7 +7,8 @@ from networkx.classes.reportviews import OutEdgeView
 
 from network_analyzer.Host import Host
 from network_analyzer.exception.exception import InterfaceNotFound
-from utils.ip import check_network_contains_ip, check_network_contains_network, compare_cidr_and_ip_address
+from utils.ip import check_network_contains_ip, check_network_contains_network, compare_cidr_and_ip_address, \
+    check_network_is_in_supernet
 
 logger = logging.getLogger(__name__)
 
@@ -179,22 +180,31 @@ def generate_tmp_graph(name: str, graph: nx.DiGraph, initial_graph: nx.DiGraph) 
     return tmp_graph
 
 
-def check_missing_interface_route(host: Host) -> list:
+def check_missing_interface_route(host: Host, source: netaddr.IPNetwork, destination: netaddr.IPNetwork) \
+        -> Tuple[list, set]:
     missing_routes = []
+    invalid_netmask = []
     for interface in host.interfaces:
         if 'ipv4' in interface:
             addr = interface['ipv4'][0]['address']
             found = False
             for table in host.routes:
                 for route in table['address_families']:
-                    if check_network_contains_ip(route['routes'][0]['next_hops'][0]['forward_router_address'],
-                                                 addr):
-                        logger.debug(f"Found route for {addr} in {host.hostname}")
+                    next_hop = route['routes'][0]['next_hops'][0]['forward_router_address']
+                    destination_route = route['routes'][0]['dest']
+                    if check_network_contains_ip(next_hop, addr):
+                        logger.debug(f"Found route {destination_route} for {addr} in {host.hostname}")
                         found = True
+                    if check_network_is_in_supernet(source.network, destination_route) or \
+                            check_network_is_in_supernet(destination.network, destination_route):
+                        if not check_network_contains_network(destination, destination_route) and \
+                                not check_network_contains_network(source, destination_route):
+                            logger.debug(f"Invalid netmask for {destination_route} in {host.hostname}")
+                            invalid_netmask.append((destination_route, next_hop))
             if not found:
                 logger.debug(f"Missing route for {addr} in {host.hostname}")
                 missing_routes.append(addr)
-    return missing_routes
+    return missing_routes, set(invalid_netmask)
 
 
 def get_interface_ip_within_ip_network(host: Host, ip_addresses: List[str]) -> Union[str, None]:

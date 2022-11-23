@@ -15,7 +15,7 @@ from network_analyzer.exception.exception import NodeNotFoundException, NetworkS
 from utils.graph import get_interface_status_from_route, check_interface_status, check_source_destination, \
     check_loop_type, generate_tmp_graph, check_missing_interface_route, get_interface_ip_within_ip_network, \
     get_interface_status_from_ip
-from utils.ip import compare_cidr_and_ip_address
+from utils.ip import compare_cidr_and_ip_address, check_network_contains_network
 
 logger = logging.getLogger(__name__)
 
@@ -163,17 +163,21 @@ class NetworkAnalyzer:
             # If the current route is not destined towards our destination network, ignore it.
             forward_router_address = route['routes'][0]['next_hops'][0]['forward_router_address']
             dest = netaddr.IPNetwork(route['routes'][0]['dest'])
-            if dest == self.destination.network or dest == self.source.network:
+            # Check destination network netmask!
+            # Source or destination network should be contained by current routes destination network
+            # If it is not contained, ignore this route.
+            if check_network_contains_network(self.destination.network, dest) \
+                    or check_network_contains_network(self.source.network, dest):
                 # Need to check if the current route next-hop interface is enabled.
                 # Also need to check if the current route interface is enabled on the other router as well.
-                # If not enabled, don't add the route
-                # !!! Routes returned by Ansible is always there, even if the actual routing table does not contain it !
+                # If not enabled or netmask is smaller don't add the route
+                # ! Routes returned by Ansible is always there, even if the actual routing table does not contain it !
                 if get_interface_status_from_route(host, forward_router_address) and \
                         get_interface_status_from_ip(self.hosts, forward_router_address):
-                    if dest == self.destination.network:
+                    if check_network_contains_network(self.destination.network, dest):
                         edges_from_source.append(self.create_graph_edge(host, forward_router_address, forward=True))
                         logger.debug(f"Adding forward edge {edges_from_source[-1]} for host {host.hostname}")
-                    if dest == self.source.network:
+                    if check_network_contains_network(self.source.network, dest):
                         edges_from_destination.append(
                             self.create_graph_edge(host, forward_router_address, forward=True)
                         )
@@ -374,11 +378,55 @@ class NetworkAnalyzer:
             if None not in edges:
                 source_host = [host for host in self.hosts if host.hostname == edges[0]][0]
                 destination_host = [host for host in self.hosts if host.hostname == edges[1]][0]
-                source_ips_without_route = check_missing_interface_route(source_host)
+                source_ips_without_route, routes_with_incorrect_netmask = check_missing_interface_route(
+                    source_host, self.source.network, self.destination.network
+                )
                 logger.debug(f"Source missing routes: {source_ips_without_route}")
+                logger.debug(f"Routes with incorrect netmask: {routes_with_incorrect_netmask}")
 
                 next_hop_addr = get_interface_ip_within_ip_network(destination_host,
                                                                    source_ips_without_route)
+                replaced_routes = []
+                for route, next_hop in routes_with_incorrect_netmask:
+                    # Need to deleted wrong routes
+                    # And new ones needs to be added (as the network mask differs)
+                    if check_network_contains_network(route, self.source.network):
+                        logger.debug(
+                            f"Changing source network mask for route {route} to /{self.source.network.prefixlen}"
+                        )
+                        replaced_routes.append({
+                            'state': 'merged',
+                            'dest_address': str(self.source.network),
+                            'next_hop': next_hop
+                        })
+                        replaced_routes.append({
+                            'state': 'deleted',
+                            'dest_address': route,
+                            'next_hop': next_hop
+                        })
+                    elif check_network_contains_network(route, self.destination.network):
+                        logger.debug(
+                            f"Changing destination network mask "
+                            f"for route {route} to /{self.destination.network.prefixlen}"
+                        )
+                        replaced_routes.append({
+                            'state': 'merged',
+                            'dest_address': str(self.destination.network),
+                            'next_hop': next_hop
+                        })
+                        replaced_routes.append({
+                            'state': 'deleted',
+                            'dest_address': route,
+                            'next_hop': next_hop
+                        })
+                logger.debug(f"Replaced routes: {replaced_routes}")
+                if replaced_routes:
+                    logger.info("Replacing routes with incorrect netmask")
+                    run_task(
+                        role='cisco-config-static_routes', hosts=source_host.hostname,
+                        role_vars={'routes': replaced_routes},
+                        data_dir=os.path.abspath('../ansible/')
+                    )
                 if next_hop_addr:
                     logger.debug(f"Destination missing routes: {next_hop_addr}")
                     run_task(
@@ -386,8 +434,8 @@ class NetworkAnalyzer:
                         role_vars={'routes': [
                             {
                                 'dest_address': str(
-                                    netaddr.IPNetwork(self.destination.network).cidr if direction == 'source'
-                                    else netaddr.IPNetwork(self.source.network).cidr),
+                                    self.destination.network.cidr if direction == 'source'
+                                    else self.source.network.cidr),
                                 'next_hop': str(netaddr.IPNetwork(next_hop_addr).ip)
                             }
                         ]},

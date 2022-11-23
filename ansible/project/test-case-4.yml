@@ -2,16 +2,17 @@
 - name: "PRE-TASK -- Setup initial network"
   ansible.builtin.import_playbook: initial-network.yml
 
-- name: "TEST-CASE #4 -- Set incorrect netmask on R2"
+- name: "TEST-CASE #4 -- Set incorrect next-hop parameter in R3 router"
+  # Source: 10.0.1.2/24
+  # Destination: 10.0.2.2/24
   gather_facts: False
-  hosts: R2
+  hosts: R3
   vars_files:
     - ../vars/test-case-4.yml
   
   tasks:
-    - name: "Change IP interface status on R2"
+    - name: "Set static route"
       ansible.builtin.include_role:
-         name: cisco-config-static_routes
+        name: cisco-config-static_routes
       vars:
-        routes: "{{ R2.routes }}"
-        state: replaced
+        routes: "{{ R3.routes }}"

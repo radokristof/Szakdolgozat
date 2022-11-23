@@ -1,6 +1,16 @@
 ---
-R3:
+R2:
   routes:
+    - dest_address: 10.0.2.0/28
+      next_hop: 192.168.16.2
+      state: merged
     - dest_address: 10.0.2.0/24
-      next_hop: 192.168.15.1
-      state: replaced
+      next_hop: 192.168.16.2
+      state: deleted
+
+    - dest_address: 10.0.1.0/28
+      next_hop: 192.168.14.1
+      state: merged
+    - dest_address: 10.0.1.0/24
+      next_hop: 192.168.14.1
+      state: deleted
