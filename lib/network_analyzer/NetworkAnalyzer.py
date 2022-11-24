@@ -374,8 +374,10 @@ class NetworkAnalyzer:
             f"Rupture in reverse route: Between {rupture_node_destination} and {reverse_rupture_node_destination}"
         )
         fixed_route = False
+        logger.debug(f"Missing routes: {missing_routes}")
         for direction, edges in missing_routes.items():
             if None not in edges:
+                logger.debug(f"Missing route in {direction} between {edges}")
                 source_host = [host for host in self.hosts if host.hostname == edges[0]][0]
                 destination_host = [host for host in self.hosts if host.hostname == edges[1]][0]
                 source_ips_without_route, routes_with_incorrect_netmask = check_missing_interface_route(
@@ -395,13 +397,13 @@ class NetworkAnalyzer:
                             f"Changing source network mask for route {route} to /{self.source.network.prefixlen}"
                         )
                         replaced_routes.append({
-                            'state': 'merged',
-                            'dest_address': str(self.source.network),
+                            'state': 'deleted',
+                            'dest_address': route,
                             'next_hop': next_hop
                         })
                         replaced_routes.append({
-                            'state': 'deleted',
-                            'dest_address': route,
+                            'state': 'merged',
+                            'dest_address': str(self.source.network.cidr),
                             'next_hop': next_hop
                         })
                     elif check_network_contains_network(route, self.destination.network):
@@ -410,13 +412,13 @@ class NetworkAnalyzer:
                             f"for route {route} to /{self.destination.network.prefixlen}"
                         )
                         replaced_routes.append({
-                            'state': 'merged',
-                            'dest_address': str(self.destination.network),
+                            'state': 'deleted',
+                            'dest_address': route,
                             'next_hop': next_hop
                         })
                         replaced_routes.append({
-                            'state': 'deleted',
-                            'dest_address': route,
+                            'state': 'merged',
+                            'dest_address': str(self.destination.network.cidr),
                             'next_hop': next_hop
                         })
                 logger.debug(f"Replaced routes: {replaced_routes}")
@@ -427,6 +429,7 @@ class NetworkAnalyzer:
                         role_vars={'routes': replaced_routes},
                         data_dir=os.path.abspath('../ansible/')
                     )
+                    fixed_route = True
                 if next_hop_addr:
                     logger.debug(f"Destination missing routes: {next_hop_addr}")
                     run_task(
