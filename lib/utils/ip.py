@@ -13,7 +13,8 @@ def compare_cidr_and_ip_address(cidr_ip: str, ip_address: str) -> bool:
     return netaddr.IPNetwork(cidr_ip).ip == netaddr.IPAddress(ip_address)
 
 
-def check_network_contains_ip(ip_address: str, network: str) -> bool:
+def check_network_contains_ip(ip_address: Union[str, netaddr.IPAddress], network: Union[str, netaddr.IPNetwork]) \
+        -> bool:
     """
     Check if the provided ip_address is in the provided network
     :param ip_address: The IP address to check

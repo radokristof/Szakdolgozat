@@ -14,10 +14,12 @@ from network_analyzer.exception.exception import NodeNotFoundException, NetworkS
     NetworkMultipleDefinitionException
 from utils.graph import get_interface_status_from_route, check_interface_status, check_source_destination, \
     check_loop_type, generate_tmp_graph, check_missing_interface_route, get_interface_ip_within_ip_network, \
-    get_interface_status_from_ip
-from utils.ip import compare_cidr_and_ip_address, check_network_contains_network
+    get_interface_status_from_ip, get_ip_address_from_same_subnet, get_route_match_by_dest
+from utils.ip import compare_cidr_and_ip_address, check_network_contains_network, check_network_contains_ip
 
 logger = logging.getLogger(__name__)
+
+MANAGEMENT_NETWORK = netaddr.IPNetwork('10.10.20.0/24')
 
 
 class NetworkAnalyzer:
@@ -58,7 +60,7 @@ class NetworkAnalyzer:
         self.initial_graph_from_source = self.graph_from_source
         self.initial_graph_from_destination = self.graph_from_destination
 
-    def _refresh(self, facts: dict):
+    def _refresh(self, facts: dict) -> None:
         """
         Refresh the current instance.
         Instead of calling __init__ directly (which is a bad practice), 
@@ -75,7 +77,7 @@ class NetworkAnalyzer:
         self.init_network(self.source.network, self.destination.network)
         self.init_graph()
 
-    def init_graph(self):
+    def init_graph(self) -> None:
         """
         Create an initial graph of the network
         Go through the network hosts
@@ -103,7 +105,7 @@ class NetworkAnalyzer:
                                                  label='Route from destination to source')
         logger.debug("Network initialization complete")
 
-    def init_network(self, source: netaddr.IPNetwork, destination: netaddr.IPNetwork):
+    def init_network(self, source: netaddr.IPNetwork, destination: netaddr.IPNetwork) -> None:
         """
         Initialize network, find source and destination network provided by the user.
         If these networks cannot be found in the current hosts, the program will exit
@@ -137,10 +139,10 @@ class NetworkAnalyzer:
     def create_graph_edge(self, host: Host, source_ip: str, forward: bool) -> Union[Tuple[str, str], None]:
         """
         Create a graph edge with source ip (IP address of current host)
-        and finding the opposite side of the link in one of the available hosts.
-        :param host:
-        :param source_ip:
-        :param forward:
+        and finding the opposite side of the link in one of the available hosts
+        :param host: The Host object
+        :param source_ip: The IP address of the current route
+        :param forward: Forward or backward route. If forward the tuple will be in the form (source, destination)
         :return: tuple with graph edges
         """
         try:
@@ -154,6 +156,12 @@ class NetworkAnalyzer:
 
     def create_route_edge(self, host: Host, table: dict) \
             -> Tuple[Union[List[Tuple[str, str]], List], Union[List[Tuple[str, str]], List]]:
+        """
+
+        :param host:
+        :param table:
+        :return:
+        """
         # Filter VRF routes. In our environment, VRF routes only represent management network access
         # which we would like to filter from our real network.
         edges_from_source = []
@@ -202,6 +210,10 @@ class NetworkAnalyzer:
         return None
 
     def detect_loop_in_route(self) -> dict:
+        """
+
+        :return:
+        """
         # Check if the current graph contains a loop.
         loops = {}
         source_loop = None
@@ -305,11 +317,11 @@ class NetworkAnalyzer:
     def get_shortest_path(self) -> list:
         """
         Get the shortest path in a graph.
-        :return:
+        :return: List of nodes in the shortest path
         """
         return nx.shortest_path(self.graph_from_source, self.source.hostname, self.destination.hostname)
 
-    def refresh_network(self):
+    def refresh_network(self) -> None:
         """
         Gather facts and reinitialize network
         :return: None
@@ -317,7 +329,11 @@ class NetworkAnalyzer:
         results = gather_ios_facts()
         self._refresh(results)
 
-    def check_fix(self):
+    def check_fix(self) -> bool:
+        """
+        Check the applied fix. It returns True if the fix is applied correctly.
+        :return: True if the network is fixed, False otherwise.
+        """
         self.refresh_network()
         network_state = self.detect_loop_in_route()
         if network_state['source']['affected'] is False and network_state['destination']['affected'] is False:
@@ -378,8 +394,8 @@ class NetworkAnalyzer:
         for direction, edges in missing_routes.items():
             if None not in edges:
                 logger.debug(f"Missing route in {direction} between {edges}")
-                source_host = [host for host in self.hosts if host.hostname == edges[0]][0]
-                destination_host = [host for host in self.hosts if host.hostname == edges[1]][0]
+                source_host = self.get_host_from_hostname(edges[0])
+                destination_host = self.get_host_from_hostname(edges[1])
                 source_ips_without_route, routes_with_incorrect_netmask = check_missing_interface_route(
                     source_host, self.source.network, self.destination.network
                 )
@@ -454,7 +470,26 @@ class NetworkAnalyzer:
                 return True
         return False
 
+    def get_host_from_hostname(self, hostname: str) -> Host:
+        """
+        Get a Host object from unique hostname
+        :param hostname: The hostname of the host
+        :return: The Host object
+        """
+        for host in self.hosts:
+            if host.hostname == hostname:
+                return host
+
     def traverse_route(self, graph: nx.DiGraph, source_node: str, dest_node: str) -> Union[str, None]:
+        """
+        Traverse the graph from source to destination node and find the last node in the route.
+        If the destination node is found, None will be returned.
+        Otherwise, the last node name will be returned
+        :param graph: The graph to traverse
+        :param source_node: The source where the traverse should be started
+        :param dest_node: The destination which should be reached
+        :return: Last node or None
+        """
         logger.debug(f"Traversing {source_node}")
         neighbor = [n for n in graph.neighbors(source_node)]
         if not neighbor:
@@ -465,15 +500,90 @@ class NetworkAnalyzer:
             return None
         return self.traverse_route(graph, neighbor[0], dest_node)
 
-    def fix_loop(self):
-        logger.debug("Init fixing loop")
-        print(self.source.hostname)
+    def check_and_fix_loop(self, last_node_in_loop: str, last_node_from_dest: str,
+                           destination_network: Union[netaddr.IPNetwork, str]) -> bool:
+        logger.debug(f"Last node in loop: {last_node_in_loop}")
+        common_ips = get_ip_address_from_same_subnet(
+            self.get_host_from_hostname(last_node_in_loop),
+            self.get_host_from_hostname(last_node_from_dest)
+        )
+        logger.debug(f"Common IPs: {common_ips}")
+        possible_ip = tuple()
+        for source, dest in common_ips:
+            if not check_network_contains_network(source, MANAGEMENT_NETWORK) and \
+                    not check_network_contains_network(dest, MANAGEMENT_NETWORK):
+                logger.info(f"Found possible fix: {source} -> {dest}")
+                possible_ip = (source, dest)
+                break
+        if possible_ip:
+            # Get route which is towards destination network (or contained in it)
+            # Rewrite that rule (without changing the destination) with its new next_hop ip
+            original_dest, wrong_next_hop = get_route_match_by_dest(
+                self.get_host_from_hostname(last_node_in_loop),
+                destination_network
+            )
+            logger.debug(f"Removing route from {last_node_in_loop} - {wrong_next_hop} towards {original_dest}")
+            run_task(
+                role='cisco-config-static_routes', hosts=last_node_in_loop,
+                role_vars={'routes': [
+                    {
+                        'dest_address': str(original_dest),
+                        'next_hop': str(wrong_next_hop),
+                        'state': 'deleted'
+                    }
+                ]},
+                data_dir=os.path.abspath('../ansible/')
+            )
+            logger.debug(f"Adding route to {last_node_in_loop} - {possible_ip[1]} towards {original_dest}")
+            run_task(
+                role='cisco-config-static_routes', hosts=last_node_in_loop,
+                role_vars={'routes': [
+                    {
+                        'dest_address': str(original_dest),
+                        'next_hop': str(netaddr.IPNetwork(possible_ip[1]).ip),
+                        'state': 'merged'
+                    }
+                ]},
+                data_dir=os.path.abspath('../ansible/')
+            )
+            if self.check_fix():
+                logger.info("Loop fixed")
+                return True
+        logger.info(f"Possible IP pair not found with {last_node_from_dest} - {last_node_in_loop}")
+        return False
 
-    def __str__(self):
+    def fix_loop(self) -> bool:
+        """
+
+        :return:
+        """
+        logger.debug("Init fixing loop")
+        state = self.detect_loop_in_route()
+        if state['source']['loop']:
+            logger.debug("Loop from source to destination detected")
+            last_node_from_dest = self.traverse_route(
+                self.graph_from_source.reverse(copy=True), 'PC-D', 'PC-S')
+            logger.debug(f"Last node from destination: {last_node_from_dest}")
+            for last_node_in_loop in reversed(state['source']['members']):
+                if self.check_and_fix_loop(last_node_in_loop, last_node_from_dest, self.destination.network):
+                    return True
+            logger.warning("No possible fix found!")
+        if state['destination']['loop']:
+            logger.debug("Loop from destination to source detected")
+            last_node_from_source = self.traverse_route(
+                self.graph_from_destination.reverse(copy=True), 'PC-S', 'PC-D')
+            logger.debug(f"Last node from source: {last_node_from_source}")
+            for last_node_in_loop in reversed(state['destination']['members']):
+                if self.check_and_fix_loop(last_node_in_loop, last_node_from_source, self.source.network):
+                    return True
+            logger.warning("No possible fix found!")
+        return False
+
+    def __str__(self) -> str:
         ret_string = ""
         for host in self.hosts:
             ret_string += str(host) + "\n"
         return ret_string
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"NetworkAnalyzer({str(self.hosts)})"

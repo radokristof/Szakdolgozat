@@ -10,6 +10,7 @@ from colorama import Fore, Style, init  # type: ignore
 from ansible_api.facts import gather_ios_facts
 from ansible_api.playbook import run_playbook
 from network_analyzer.NetworkAnalyzer import NetworkAnalyzer
+from utils.permission import change_ansible_runner_permissions
 
 logger = logging.getLogger()
 
@@ -67,6 +68,10 @@ def setup_parser() -> argparse.Namespace:
 
 
 def main() -> None:
+    """
+    Main function
+    :return: None
+    """
     # Init colorama, setup logging
     init(autoreset=True)
     args = setup_parser()
@@ -76,13 +81,7 @@ def main() -> None:
     os.environ["ANSIBLE_CONFIG"] = os.path.abspath("../ansible/ansible.cfg")
 
     # Change the permissions of the ansible/project/main.json file.
-    # This is a remedy of ansible-runner (at least in Windows-WSL).
-    # The file will be rewritten/recreated with wrong permissions,
-    # so ansible-runner can't access it next time when running the program.
-    ansible_json_file_path = os.path.abspath("../ansible/project/main.json")
-    runner_json_file = Path(ansible_json_file_path)
-    if runner_json_file.exists():
-        os.chmod(ansible_json_file_path, 0o666)
+    change_ansible_runner_permissions()
 
     default_data_dir = os.path.abspath(args.datadir)
 
@@ -148,19 +147,25 @@ def main() -> None:
         print(Fore.MAGENTA + f"Current loop: {', '.join(network_state['members'])}")
         if args.autofix:
             logger.debug("Auto-fixing non-affecting loop")
-            print(Fore.YELLOW + "Auto-fixing rupture")
+            print(Fore.YELLOW + "Auto-fixing loop")
+            problem_fixed = analyzer.fix_loop()
         else:
             logger.debug("No auto-fixing non-affecting loop")
             print(Fore.CYAN + "Summary status of the network can be seen in the generated graph")
         problem_found = True
-    elif network_state['loop'] is True and network_state['affected'] is True:
+    elif (network_state['source']['loop'] is True and network_state['source']['affected'] is True) or \
+            (network_state['destination']['loop'] is True and network_state['destination']['affected'] is True):
         logger.debug("Loop found in network")
         print(Fore.RED + "There is a loop in the network and the current route is affected! If auto-repair is enabled, "
                          "I will try to eliminate the loop!")
-        print(Fore.MAGENTA + f"Current loop: {', '.join(network_state['members'])}")
+        if network_state['source']['loop'] is True:
+            print(Fore.MAGENTA + f"Current loop: {', '.join(network_state['source']['members'])}")
+        elif network_state['destination']['loop'] is True:
+            print(Fore.MAGENTA + f"Current loop: {', '.join(network_state['destination']['members'])}")
         if args.autofix:
             logger.debug("Auto-fixing loop")
-            analyzer.fix_loop()
+            print(Fore.YELLOW + "Auto-fixing loop")
+            problem_fixed = analyzer.fix_loop()
         else:
             logger.debug("No auto-fixing loop")
             print(Fore.CYAN + "Summary status of the network can be seen in the generated graph")

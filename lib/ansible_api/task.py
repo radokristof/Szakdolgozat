@@ -2,6 +2,8 @@ import logging
 from pathlib import Path
 import ansible_runner  # type: ignore
 
+from utils.permission import change_ansible_runner_permissions
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,5 +18,6 @@ def run_task(role: str, hosts: str, role_vars: dict, data_dir: str) -> None:
     """
     logger.info("Running task/role {} in data dir {}".format(Path(role).name, Path(data_dir).name))
     r = ansible_runner.run(private_data_dir=data_dir, role=role, hosts=hosts, role_vars=role_vars)
+    change_ansible_runner_permissions()
     logger.info("{} ({})".format(r.status, r.rc))
     logger.debug(r.stats)

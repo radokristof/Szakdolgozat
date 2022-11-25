@@ -1,5 +1,5 @@
 import logging
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Any
 
 import netaddr
 import networkx as nx
@@ -7,6 +7,7 @@ from networkx.classes.reportviews import OutEdgeView
 
 from network_analyzer.Host import Host
 from network_analyzer.exception.exception import InterfaceNotFound
+from utils.CompareTuple import compare_list_tuples
 from utils.ip import check_network_contains_ip, check_network_contains_network, compare_cidr_and_ip_address, \
     check_network_is_in_supernet
 
@@ -33,6 +34,12 @@ def get_interface_status_from_route(host: Host, ip_address: str) -> bool:
 
 
 def get_interface_status_from_ip(hosts: List[Host], ip_address: str) -> bool:
+    """
+
+    :param hosts:
+    :param ip_address:
+    :return:
+    """
     logger.debug(f"Searching interfaceIp for IP address {ip_address}")
     for host in hosts:
         for interface in host.interfaces:
@@ -65,7 +72,7 @@ def get_route_from_interface(host: Host, interface: dict, source: netaddr.IPNetw
 
 def check_interface_status(host: Host, source: netaddr.IPNetwork, destination: netaddr.IPNetwork) -> list:
     """
-    Get all interface statutes from a host
+    Get all interface statuses from a host
     :param destination: The source network which needs to be enabled
     :param source: The destination network which needs to be enabled
     :param host: The host object
@@ -112,7 +119,7 @@ def check_source_destination(interface: dict, source: netaddr.IPNetwork, destina
     return None
 
 
-def get_new_edges(initial_graph, current_graph) -> OutEdgeView:
+def get_new_edges(initial_graph: nx.DiGraph, current_graph: nx.DiGraph) -> OutEdgeView:
     """
     Get which edges were added to the current graph, compared to the initial state
     :param initial_graph:
@@ -169,11 +176,8 @@ def generate_tmp_graph(name: str, graph: nx.DiGraph, initial_graph: nx.DiGraph) 
     new_edges = get_new_edges(initial_graph, graph)
     removed_edges = get_removed_edges(initial_graph, graph)
     tmp_graph.add_edges_from(new_edges, color='green', weight=2, style='--', label='Added edge')
-    for source, destination in removed_edges:
-        nx.set_edge_attributes(tmp_graph, {(source, destination): {"color": 'red',
-                                                                   "label": 'Removed edge',
-                                                                   "style": '--'
-                                                                   }})
+    tmp_graph.add_edges_from(removed_edges, color='red', weight=2, style='--', label='Removed edge')
+
     logger.debug(f"{name} new edges: {new_edges}")
     logger.debug(f"{name} removed edges: {removed_edges}")
     logger.debug(f"{name} graph edges: {tmp_graph.edges(data=True)}")
@@ -182,6 +186,13 @@ def generate_tmp_graph(name: str, graph: nx.DiGraph, initial_graph: nx.DiGraph) 
 
 def check_missing_interface_route(host: Host, source: netaddr.IPNetwork, destination: netaddr.IPNetwork) \
         -> Tuple[list, set]:
+    """
+
+    :param host:
+    :param source:
+    :param destination:
+    :return:
+    """
     missing_routes = []
     invalid_netmask = []
     for interface in host.interfaces:
@@ -208,6 +219,12 @@ def check_missing_interface_route(host: Host, source: netaddr.IPNetwork, destina
 
 
 def get_interface_ip_within_ip_network(host: Host, ip_addresses: List[str]) -> Union[str, None]:
+    """
+    Get the IP of an interface if it is contained within the supplied IP Network
+    :param host: The with available IP addresses
+    :param ip_addresses: The IP address which should be contained within the interface IP address
+    :return: The IP address of the interface if it is contained within the supplied IP Network, None otherwise
+    """
     for interface in host.interfaces:
         if 'ipv4' in interface:
             addr = interface['ipv4'][0]['address']
@@ -215,3 +232,31 @@ def get_interface_ip_within_ip_network(host: Host, ip_addresses: List[str]) -> U
                 if check_network_contains_network(addr, ip_address):
                     return addr
     return None
+
+
+def get_ip_address_from_same_subnet(source: Host, destination: Host) -> List[Tuple[Any, Any]]:
+    """
+    Get the IP address of the source and destination host which are in the same subnet
+    :param source: The source host
+    :param destination: The destination host
+    :return: The IP address of the source and destination host which are in the same subnet
+    """
+    common_ips = []
+    for source_interface in source.interfaces:
+        if 'ipv4' in source_interface:
+            source_ip = source_interface['ipv4'][0]['address']
+            for dest_interface in destination.interfaces:
+                if 'ipv4' in dest_interface:
+                    dest_ip = dest_interface['ipv4'][0]['address']
+                    if check_network_contains_network(source_ip, dest_ip):
+                        if not compare_list_tuples(common_ips, (source_ip, dest_ip)):
+                            common_ips.append((source_ip, dest_ip))
+    return common_ips
+
+
+def get_route_match_by_dest(host: Host, dest: Union[str, netaddr.IPNetwork]) -> Tuple[str, str]:
+    for table in host.routes:
+        if 'vrf' not in table:
+            for route in table['address_families']:
+                if check_network_contains_network(dest, route['routes'][0]['dest']):
+                    return route['routes'][0]['dest'], route['routes'][0]['next_hops'][0]['forward_router_address']

@@ -11,6 +11,10 @@ class Host:
     
     # Extract useful info from the received facts' dict.
     def __init__(self, facts: dict):
+        """
+
+        :param facts:
+        """
         self.hostname = facts['ansible_net_hostname']
         self.interfaces = facts['ansible_network_resources']['l3_interfaces']
         # Merging different interface variables (interface, l2_interface, l3_interface).
@@ -34,6 +38,11 @@ class Host:
 class SourceHost(Host):
     # SourceHost contains the source network.
     def __init__(self, source: netaddr.IPNetwork, facts: dict):
+        """
+
+        :param source:
+        :param facts:
+        """
         self.network = source
         logger.debug("Init SourceHost")
         super().__init__(facts)
@@ -42,6 +51,11 @@ class SourceHost(Host):
 class DestinationHost(Host):
     # DestinationHost contains the destination network.
     def __init__(self, destination: netaddr.IPNetwork, facts: dict):
+        """
+
+        :param destination:
+        :param facts:
+        """
         self.network = destination
         logger.debug("Init DestinationHost")
         super().__init__(facts)
