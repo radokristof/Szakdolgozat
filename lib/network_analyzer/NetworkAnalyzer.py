@@ -157,10 +157,10 @@ class NetworkAnalyzer:
     def create_route_edge(self, host: Host, table: dict) \
             -> Tuple[Union[List[Tuple[str, str]], List], Union[List[Tuple[str, str]], List]]:
         """
-
-        :param host:
-        :param table:
-        :return:
+        Create a graph edge for a route
+        :param host: The Host object
+        :param table: The route table
+        :return: tuple with graph edges (edges from source, edges from destination)
         """
         # Filter VRF routes. In our environment, VRF routes only represent management network access
         # which we would like to filter from our real network.
@@ -198,9 +198,9 @@ class NetworkAnalyzer:
         Create static PC nodes in the graph. These represent the computers used in network troubleshooting.
         PC-S will be the Source PC (this will be placed at the source network)
         PC-D will be the Destination PC (this will be placed at the destination network)
-        :param host:
-        :param interface:
-        :return:
+        :param host: The Host object which is a router next to the PC
+        :param interface: The interface of the router which might be connected to the PC
+        :return: tuple with an edge (router hostname, PC hostname)
         """
         if 'ipv4' in interface:
             if netaddr.IPNetwork(interface['ipv4'][0]['address']) == self.source.network:
@@ -211,8 +211,8 @@ class NetworkAnalyzer:
 
     def detect_loop_in_route(self) -> dict:
         """
-
-        :return:
+        Detect a loop in the routes.
+        :return: Return a dictionary of loops in the source->destination and destination->source route
         """
         # Check if the current graph contains a loop.
         loops = {}
@@ -238,8 +238,9 @@ class NetworkAnalyzer:
         Check if a host has an IP Address
         Parameter ip_address is a normal ip address with dot notation. Like: 192.168.10.1
         Interface IP address is in CIDR notation. Like: 192.168.10.1/30
-        :param ip_address:
-        :return:
+        Returns NodeNotFoundException if the IP address is not found in any of the hosts
+        :param ip_address: The IP address to search for
+        :return: The Host object
         """
         for host in self.hosts:
             for interface in host.interfaces:
@@ -258,8 +259,8 @@ class NetworkAnalyzer:
         Removed node: should be red
         Added node: should be dotted and green
         Warning node: should be yellow (edges which might have a problem but does not affect current routing)
-        :param filename:
-        :return:
+        :param filename: Filename of the plot to be saved
+        :return: None
         """
         logger.debug("Create plot of graph")
         # Get source graph new and removed edges
@@ -342,8 +343,11 @@ class NetworkAnalyzer:
 
     def fix_rupture(self) -> bool:
         """
-
-        :return:
+        Fix ruptures in the network
+        This function will detect multiple types of ruptures.
+        First it will scan for disabled interfaces in the source->destination and destination->source direction.
+        If this fix is not enough (the network still has ruptures) it will try to find missing routes in the network.
+        :return: True if the network is fixed, False otherwise.
         """
         logger.debug("Init fixing rupture")
         # Check if configured interfaces are up
@@ -502,6 +506,14 @@ class NetworkAnalyzer:
 
     def check_and_fix_loop(self, last_node_in_loop: str, last_node_from_dest: str,
                            destination_network: Union[netaddr.IPNetwork, str]) -> bool:
+        """
+        Helper function to check a node if it is where the loop is sourced from.
+        Fix the route if this is the correct node, return False if it is not the right node
+        :param last_node_in_loop: The last node in the loop
+        :param last_node_from_dest: The last node from the destination
+        :param destination_network: The destination network which needs to be reached.
+        :return: True if the route was fixed with this node, False if not, needs to check other nodes
+        """
         logger.debug(f"Last node in loop: {last_node_in_loop}")
         common_ips = get_ip_address_from_same_subnet(
             self.get_host_from_hostname(last_node_in_loop),
@@ -554,8 +566,8 @@ class NetworkAnalyzer:
 
     def fix_loop(self) -> bool:
         """
-
-        :return:
+        Fix the loop in the network. This works after the loop type is determined.
+        :return: True if the loop was fixed, False otherwise
         """
         logger.debug("Init fixing loop")
         state = self.detect_loop_in_route()

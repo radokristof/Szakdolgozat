@@ -35,10 +35,11 @@ def get_interface_status_from_route(host: Host, ip_address: str) -> bool:
 
 def get_interface_status_from_ip(hosts: List[Host], ip_address: str) -> bool:
     """
-
-    :param hosts:
-    :param ip_address:
-    :return:
+    Get the interface status (if it is enabled or not) from an IP address
+    If an IP address provided is not found in the hosts, InterfaceNotFound error will be raised
+    :param hosts: The list of hosts to check
+    :param ip_address: The IP address to find and check
+    :return: True if the interface is enabled, False if it is disabled
     """
     logger.debug(f"Searching interfaceIp for IP address {ip_address}")
     for host in hosts:
@@ -92,7 +93,7 @@ def get_graph_difference(new_graph: nx.DiGraph, old_graph: nx.DiGraph) -> nx.DiG
     This will show which edges exist in the new graph, which is not in the old graph
     :param new_graph: The newer graph where new edges/nodes might be added
     :param old_graph: The older/initial graph which will be compared to the newer one.
-    :return:
+    :return: A new graph with the difference (edges/nodes) between the two graphs
     """
     return nx.difference(new_graph, old_graph)
 
@@ -122,9 +123,9 @@ def check_source_destination(interface: dict, source: netaddr.IPNetwork, destina
 def get_new_edges(initial_graph: nx.DiGraph, current_graph: nx.DiGraph) -> OutEdgeView:
     """
     Get which edges were added to the current graph, compared to the initial state
-    :param initial_graph:
-    :param current_graph:
-    :return:
+    :param initial_graph: The initial graph
+    :param current_graph: The current graph with the possible new edges
+    :return: The list of new edges
     """
     return get_graph_difference(current_graph, initial_graph).edges
 
@@ -132,21 +133,22 @@ def get_new_edges(initial_graph: nx.DiGraph, current_graph: nx.DiGraph) -> OutEd
 def get_removed_edges(initial_graph: nx.DiGraph, current_graph: nx.DiGraph) -> OutEdgeView:
     """
     Get which edges were removed from the current graph, compared to the initial state
-    :param initial_graph:
-    :param current_graph:
-    :return:
+    :param initial_graph: The initial graph
+    :param current_graph: The current graph which possibly has removed edges
+    :return: The list of removed edges
     """
     return get_graph_difference(initial_graph, current_graph).edges
 
 
 def check_loop_type(graph: nx.DiGraph, loop: List[str], source: str, destination: str) -> dict:
     """
-
-    :param graph:
-    :param loop:
-    :param source:
-    :param destination:
-    :return:
+    Given a graph and loop, check loop type. It can be either a source loop or a destination loop.
+    Also, this will check if the loop affects the current route
+    :param graph: The graph with the loop
+    :param loop: The loop in the graph
+    :param source: The source graph node
+    :param destination: The destination graph node
+    :return: Dictionary with the loop type and if it affects the current route. If it is a loop, members also included
     """
     if loop:
         if nx.has_path(graph, source, destination):
@@ -166,11 +168,13 @@ def check_loop_type(graph: nx.DiGraph, loop: List[str], source: str, destination
 
 def generate_tmp_graph(name: str, graph: nx.DiGraph, initial_graph: nx.DiGraph) -> nx.DiGraph:
     """
-
-    :param name:
-    :param graph:
-    :param initial_graph:
-    :return:
+    Generate a temporary graph from an initial graph and the current graph.
+    It will return a new graph where the new and removed edges will be marked.
+    New edges will be green and dashed, removed edges will be red and dashed
+    :param name: Name for debugging. Source or destination mainly
+    :param graph: The current graph
+    :param initial_graph: The initial graph
+    :return: The new graph with the new and removed edges marked
     """
     tmp_graph = graph
     new_edges = get_new_edges(initial_graph, graph)
@@ -187,11 +191,14 @@ def generate_tmp_graph(name: str, graph: nx.DiGraph, initial_graph: nx.DiGraph) 
 def check_missing_interface_route(host: Host, source: netaddr.IPNetwork, destination: netaddr.IPNetwork) \
         -> Tuple[list, set]:
     """
-
-    :param host:
-    :param source:
-    :param destination:
-    :return:
+    Check if there is a corresponding route for each interface in a given host.
+    This will also include routes which is there, but probably the netmask is wrong.
+    The returned value will include both.
+    :param host: The host to check
+    :param source: The source network which will be checked against routes.
+    Sources will be checked to ensure 2-way routing
+    :param destination: The destination network which is checked against the routes
+    :return: A tuple with a list of missing routes and a set of routes with incorrect netmask
     """
     missing_routes = []
     invalid_netmask = []
@@ -255,6 +262,12 @@ def get_ip_address_from_same_subnet(source: Host, destination: Host) -> List[Tup
 
 
 def get_route_match_by_dest(host: Host, dest: Union[str, netaddr.IPNetwork]) -> Tuple[str, str]:
+    """
+    Get a route (destination and next_hop) from a host which matches or includes the destination
+    :param host: The host which should be checked
+    :param dest: The destination address
+    :return: Tuple with the destination and next_hop of the route
+    """
     for table in host.routes:
         if 'vrf' not in table:
             for route in table['address_families']:

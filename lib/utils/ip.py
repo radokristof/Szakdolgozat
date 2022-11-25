@@ -41,7 +41,12 @@ def check_network_contains_network(contained_network: Union[str, netaddr.IPNetwo
 def check_network_is_in_supernet(contained_network: Union[str, netaddr.IPNetwork],
                                  containing_network: Union[str, netaddr.IPNetwork]) -> bool:
     """
-    Check if the provided network is in a private supernet (Eg.:
+    Check if the provided network is in a private supernet (Eg.: 10.0.1.0/24 is in 10.0.0.0/16)
+    Also check if the current network is private or not. If it is private, only check private supernets.
+    Otherwise, check all
+    :param contained_network: The network which should be contained in the supernet
+    :param containing_network: The supernet which should contain the contained_network
+    :return: True if the containing_network contains the contained_network, False if it does not
     """
     net = netaddr.IPNetwork(contained_network)
     private = net.is_private()
