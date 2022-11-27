@@ -1767,6 +1767,13 @@ nodes:
                     - 10.10.20.111/24
                   gateway4: 10.10.20.254
                   set-name: ens2
+                ens3:
+                  match:
+                    name: ens3
+                  addresses:
+                    - 10.0.1.2/24
+                  gateway4: 10.0.1.1/24
+                  set-name: ens3
       runcmd:
         - netplan apply
         - sed -i '/^\s*PasswordAuthentication\s\+no/d' /etc/ssh/sshd_config
@@ -1838,6 +1845,13 @@ nodes:
                     - 10.10.20.112/24
                   gateway4: 10.10.20.254
                   set-name: ens2
+                ens3:
+                  match:
+                      name: ens3
+                  addresses:
+                    - 10.0.2.2/24
+                  gateway4: 10.0.2.1/24
+                  set-name: ens3
       runcmd:
         - netplan apply
         - sed -i '/^\s*PasswordAuthentication\s\+no/d' /etc/ssh/sshd_config
