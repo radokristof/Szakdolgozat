@@ -15,7 +15,7 @@ from network_analyzer.exception.exception import NodeNotFoundException, NetworkS
 from utils.graph import get_interface_status_from_route, check_interface_status, check_source_destination, \
     check_loop_type, generate_tmp_graph, check_missing_interface_route, get_interface_ip_within_ip_network, \
     get_interface_status_from_ip, get_ip_address_from_same_subnet, get_route_match_by_dest
-from utils.ip import compare_cidr_and_ip_address, check_network_contains_network, check_network_contains_ip
+from utils.ip import compare_cidr_and_ip_address, check_network_contains_network
 
 logger = logging.getLogger(__name__)
 
