@@ -1765,8 +1765,18 @@ nodes:
                     name: ens2
                   addresses:
                     - 10.10.20.111/24
-                  gateway4: 10.10.20.254
                   set-name: ens2
+                  routes:
+                    - to: 0.0.0.0/0
+                      via: 10.10.20.254
+                      table: 400
+                  routing-policy:
+                    - from: 10.10.20.111/24
+                      to: 0.0.0.0/0
+                      table: 400
+                    - from: 0.0.0.0/0
+                      to: 10.10.20.111/24
+                      table: 400
                 ens3:
                   match:
                     name: ens3
@@ -1843,8 +1853,18 @@ nodes:
                     name: ens2
                   addresses:
                     - 10.10.20.112/24
-                  gateway4: 10.10.20.254
                   set-name: ens2
+                  routes:
+                    - to: 0.0.0.0/0
+                      via: 10.10.20.254
+                      table: 400
+                  routing-policy:
+                    - from: 10.10.20.112/24
+                      to: 0.0.0.0/0
+                      table: 400
+                    - from: 0.0.0.0/0
+                      to: 10.10.20.112/24
+                      table: 400
                 ens3:
                   match:
                       name: ens3
