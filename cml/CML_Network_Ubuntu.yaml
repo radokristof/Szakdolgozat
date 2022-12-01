@@ -1772,7 +1772,7 @@ nodes:
                     name: ens3
                   addresses:
                     - 10.0.1.2/24
-                  gateway4: 10.0.1.1/24
+                  gateway4: 10.0.1.1
                   set-name: ens3
       runcmd:
         - netplan apply
@@ -1850,7 +1850,7 @@ nodes:
                       name: ens3
                   addresses:
                     - 10.0.2.2/24
-                  gateway4: 10.0.2.1/24
+                  gateway4: 10.0.2.1
                   set-name: ens3
       runcmd:
         - netplan apply
